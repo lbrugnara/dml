@@ -1,0 +1,530 @@
+Document Markup Language
+========================
+
+[DML] is a markup language designed to be used to create technical documents, specially in `HTML` 
+format. At the same time, its key aspect is to be readable and understandable in its raw 
+form. Though simple, its design makes it flexible and powerful to easily generate new 
+target outputs as they could be `PDF` or `LaTex`.
+
+Features
+~~~~~~~~
+
+Due to its nature, [DML] tags could be compared with `HTML` elements. Like in 
+`HTML` we can divide the elements or tags as //inline elements// and //block 
+elements//.
+
+Inline elements
+---------------
+
+- Emphasis: `strong` and `italic`
+- Code: `code`
+- Underlined text: `span` with `text-decoration: underline`
+- Strikethrough text: `span` with `text-decoration: line-through`
+- Links: `a`
+- Images: `img`
+
+Block Elements
+--------------
+
+- Paragraphs: `p`
+- Headers: `h1`, `h2`, `h3` y `h4`
+- Code block: `code` with `display: block`
+- Lists: `ul`, `ol` y `li`
+- Quotes: `blockquote`
+- Thematic break: `hr`
+
+Syntax
+~~~~~~
+
+Paragraphs
+----------
+
+A `paragraph` is the most basic element in [DML]. A chunk of text that does not 
+start with a special characters is a `paragraph`. We can define it as a line that 
+starts with a non-special character and ends with [two] line breaks (`\n\n`).
+
+One line break (`\n`) in a paragraph, makes it continue in the next line:
+
+```dml-source
+My first 
+paragraph
+
+My second
+
+and third paragraphs
+```
+
+The ´Two-NL´ rule applies when the previous paragraph does not finish with a dot (`.`). If that is the case, [DML] will insert
+a break between both sentences inside the same paragraph:
+
+```dml-source
+We are in the same block element (paragraph).
+But we are two different grammatical paragraphs.
+
+We are in the same block element (paragraph)
+and also in the same grammatical paragraphs, because we are separated just by one [NL].
+
+I'm a sentence in a block element.
+
+I'm another sentences in a different block element.
+```
+
+Emphasis
+--------
+
+As mentioned above [DML] supports `strong` and `italic`
+
+```dml-source
+Text wrapped between brackets will generate an [strong] emphasis
+```
+
+```dml-source
+Use two slashes to generate a //soft// emphasis
+```
+
+```dml-source
+Use underscores to __underline__ text and strikethrough to ~~cross out~~ a word
+```
+
+```dml-source
+Use backslash (`\\`) to escape emphasis like \[strong], \//italic//, \~~strikethrough~~ and
+\__underline__
+```
+
+Escape block
+------------
+
+Wrapping text between two pair of brackets (`\`\`` and `\`\``) will escape all the markup elements
+
+```dml-source
+``[~~Markup~~ __elements__ have no effect //here//]``
+
+``nor [here]``. Now, you //can try// [here].
+```
+
+Inline Code
+-----------
+
+```dml-source
+To create an inline code element we use `backticks`
+```
+
+Event though inline code disables the markup processing inside it, there is a character that must
+be escaped, it is the backtick:
+
+```dml-source
+To use backticks (`\``) inside inline code you must escape it with a `backslash` (`\\`)
+```
+
+The previous backslash (`\\`) is escaped because it is next to an special character (`backticks`) 
+so if we don't add another `backslash`, the last `backtick` will be escaped:
+
+```dml-source
+`\\` -> Worked as expected
+
+`\` -> Escapes the last backtick, so the previous one is considered plain text (because we reached the end
+of the input inside this code block)
+```
+
+Code blocks
+-----------
+
+There are two ways to create blocks of code: using `indentation` (`\t`) or wrapping
+the block of code with three backticks (`\`\`\``) at the beginning of the first
+and the last lines:
+
+```dml-source
+	Code of block using
+	just indentation.
+
+	This is another block of code
+	because the previous block finished
+	after two new lines.
+		Nesting this line...
+			...and this line too
+
+\```
+	function Something(s)
+	{
+		return s * 4;
+	}
+\```
+```
+
+When using the //backticks method//, all the text between the first group of backticks and the following
+new line will be considered the //class// of the code block:
+
+```dml-source
+\```javascript
+/* Check my HTML source */
+function A(x)
+{
+	return x * 2;
+}
+\```
+```
+
+Inside a block of code, all the text is interpreted as plain text, this means, the markup 
+processing is disabled.
+
+When the intention is to use markup elements 
+inside a block of code, you can use an special starting token: `!\`\`\``. The exclamation 
+mark is interpreted by [DML] as an special flag indicating that the body of the code block
+must be processed as [DML] source.
+
+To understand the difference, the first example uses markup tags that are interpreted as plain
+text:
+
+```dml-source
+\```
+//function// [A] {
+	\// ~~TODO: Some task already fixed~~
+	[var] my_var = //<...some value...>//;
+}
+\```
+```
+
+Here below is exactly the same [DML] source, but the first line starts with an exclamation
+mark ([`!`]):
+
+```dml-source
+\!```
+//function// [A] {
+	\// ~~TODO: Some task already fixed~~
+	[var] my_var = //<...some value...>//;
+}
+\```
+```
+
+Links
+-----
+
+Links are generated using the tokens `[[`, `|` and `]]`. The first and last tokens are used to 
+start and finish the link. The tag is divided in three sections using pipes between the starting
+and ending tokens. These sections are `[[ text section | href section | title section ]]`.
+
+```dml-source
+[[ Leo Brugnara | http://lbrugnara.github.io | Leo's GitHub page ]]
+```
+
+```dml-source
+[[ Leo Brugnara | http://lbrugnara.github.io ]]
+```
+
+```dml-source
+[[ Leo Brugnara ]] -> The sections are not mandatory except but the `title`, 
+the other two can be ommited or left blank:
+```
+
+```dml-source
+[[ Leo Brugnara || ]] -> This is equals to the previous one, but using //empty// sections
+```
+
+```dml-source
+[[ Leo Brugnara | | Leo's GitHub page ]] -> This has no HREF
+```
+
+```dml-source
+[[ ]] -> This is NOT a link
+```
+
+```dml-source
+<strong id="link-test">Strong element with href `#link-test`</strong>
+
+[[Go to strong element| #link-test]]
+```
+
+Prepending a colon (`:`) to the href will generate a reference tag:
+
+```dml-source
+[[ Link to One | :one-ref | I'm a reference ]]
+```
+
+References
+----------
+
+To define a reference we use two pipes (`|`) and a colon (`:`). The structure is `|href:name|`
+
+```dml-source
+|one-ref: Reference 1.| One's reference
+
+|one-ref: //Reference [1].// | The reference `name` supports all the inline elemnts.
+```
+
+Images
+------
+
+Similar to links, images start and end with tokens `[{` and `}]` and they also use pipes 
+(`|`) to separate the tag in sections: `[{ Hover text | Source URL | Alt text }]`
+
+```dml-source
+[{ Much mind blown, such wow | content/img/mind_blown.gif | Mind blown}]
+```
+
+Lists
+-----
+
+Unordered lists
+```````````````
+
+Lists in [DML] are simple. A line starting with `-`, `+` or `*` followed by a
+white space will be considered a //list item//:
+
+```dml-source
+- Item A
+- Item B
+```
+
+While these items are separated by only one line break (`\n`) and the character
+used to denotate a list item is the same (in this example a hyphen `-`),
+we will be adding items to the current list:
+
+```dml-source
+- Item A
+- Item B
+- Item C
+- Item D
+```
+
+If after the new line, the following line does not start with a list item token, the text 
+is part of the previous item:
+
+```dml-source
+- Item A: 
+still A here.
+- Item B: 
+B here
+- Item C: 
+same for C
+```
+
+Adding two line breaks between items will create two lists:
+
+```dml-source
+- Item A
+- Item B
+
+- Item C
+```
+
+Changing the list //token// (its "type") will change the structure, in this case, three 
+different lists:
+
+```dml-source
+- Item A
++ Item B
+- Item C
+```
+
+A line starting with just a letter, followed by [dot] (`.`) or a [closing parenthesis] (`)`) 
+followed by a space chracter (` `), is considered an unordered lists by [DML]:
+
+```dml-source
+A. Item A
+	a) SubItem A1
+	b) SubItem A2
+B. Item B
+C. Item C
+	a. SubItem C1
+```
+
+Ordered lists
+`````````````
+
+To create enumerated lists or //ordered lists//, we use the token `#`
+
+```dml-source
+# One
+# Two
+# Three
+```
+
+If a line starts with digits, followed by [dot] (`.`) or [closing parenthesis] (`)`)
+and then by an space, it is interpreted as a new list.
+
+```dml-source
+1) One
+2) Two
+3) Three
+```
+
+If the numbers are sequential numbers, all the items will be inside the same list:
+
+```dml-source
+100) One hundred
+101) One hundred One
+102) One hundred Two
+```
+
+If the numbers are not sequential, [DML] will interpret the different items as part
+of differents lists:
+
+```dml-source
+1) List One - Item 1
+1) List Two - Item 1
+2) List Two - Item 2
+4) List Three - Item 1
+5) List Three - Item 2
+	9102802) WAT?
+	9102803) PLS?
+```
+
+Tasks List
+``````````
+
+[DML] supports //TODO list// using two special tokens: `[ ]` for new tasks and `[x]` for
+finished ones. Both tokens [must] be a valid starting line and [must] be followed
+by an space (` `):
+
+```dml-source
+[ ] Task A
+[ ] Task B
+	[ ] SubTask B1
+	[x] SubTask B2
+	[ ] SubTask B3
+[x] Task C1
+	[x] SubTask C1
+		* SubItem
+		* SubItem 2
+```
+
+Nested lists
+`````````````
+
+Nested lists work with indentation defined by `tabs` or 4-spaces. If the next line has a 
+higher indentation level than the previous one, the parser 
+will add a nested list. When parser detects an outdent, it will close the 
+nested list. Example:
+
+```dml-source
++ Item
+	+ Nested item
+		+ A new nested item
+```
+
+From the last example you can infer that nested list [does not] need to have 
+[different] tokens. In the last example we used three plus symbols (`+`) to 
+make three nested lists.
+
+A list can be outdented and the result will be the expected one:
+
+```dml-source
++ We start here
+	+ now we add a new level
+		+ this is the deepest level
+	+ but here we are going back
++ to the beginning
+```
+
+Different list symbols in the same [indentation level] will close the
+current `list` and start a new one:
+
+```dml-source
++ A
+	- B
+		* C
+	+ D
+- E
+```
+
+In the previous example you can check that `A->B->C` has the expected hierarchy,
+but `D` is a different list inside `A` (`ul`>`ul` and not `ul`>`li`). The same
+applies for `E` and `A`, they are not siblings `li` but sibling `ul`.
+
+In the next case, the structure rendered in the browser is the same, but the
+underlying representation is different:
+
+```dml-source
++ A
+	- B
+		* C
+	- D
++ E
+```
+
+Finally, all the list types can be combined and nested without restriction
+
+```dml-source
+- A
+	a) A1
+		[ ] Task SubA1
+		[x] Task SubA1-2
+			1) One
+			2) Two
+			3) Three
+		+ A //plus// list
+		+ Another item in //plus// list
+	b) A2
+		* Item 1
+		* Item 2
+- B
+```
+
+Quotes
+------
+
+All lines starting with at least one character `>` followed by an space (` `) are quotes
+
+```dml-source
+> My first blockquote
+```
+
+To add more //levels// you just need to append another `>` character:
+
+```dml-source
+> My second blockquote
+>> And my first nested blockquote
+```
+
+The first `>` [must] be the first token in the line (after a line break). For nested levels,
+blockquotes accept white spaces between `>` characters:
+
+```dml-source
+> My second blockquote
+> > We 
+>    > are all 
+>              > The nested blockquote
+```
+
+A blockquote supports ALL the elments of the [DML] language inside it:
+
+```dml-source
+> [bold] //italic// __underlined__
+```
+
+You can even use another //block element// inside quotes like `headers`, `block 
+codes` or `lists`:
+
+```dml-source
+> Block elements in blockquotes
+> ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+> 
+> Quotes support:
+> 
+> - Headers
+> - List
+> - Code blocks
+> - Todo Lists:
+> 	[ ] A
+> 	[x] B
+> 
+> \```
+> function A()
+> {
+> 	var a = 1.4;
+> }
+> \```
+```
+
+[DML] handles all the blockquotes levels, even the ones that are not directly
+written:
+
+```dml-source
+> First level
+>>>> Fourth level
+>>>>>> Sixth level
+>>>>> Fifth level
+>> Second level
+>>> Third level
+> First again
+```
