@@ -107,3 +107,4 @@ Next are pending features in no particular order
 - [x] Accept multiple input files to generate the output consuming them in the order specified in the arguments
 - [x] To create two paragraph we need the *two-nl* rule. But this rule is based on the *HTML Paragraph*, not the *grammar paragraph*. Is true that we need both,  so it would be great to check the end character when just on **NL** is used, and if that character is a dot (or eventually a defined set of punctuation marks),  we should add an *HTML Line Break* to respect the "grammar" paragraph that was intended to be used.
 - [x] List items: Using **NL** doesn't add an space between words, so if the input is "- List\nitem" the output text will be "Listitem" instead of the expected "List item"
+- [ ] Markdown output: Add space between the first list item and the previous element
