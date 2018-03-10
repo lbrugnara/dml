@@ -22,7 +22,7 @@ namespace DmlLib.Core.Nodes
             { 
                 return content;
             }
-            return "*" + content + "*";
+            return "_" + content?.Trim() + "_";
         }
     }
 }

@@ -78,6 +78,14 @@ namespace DmlLib.Core.Nodes
             }
         }
 
+        public virtual List<DmlElement> Children
+        {
+            get
+            {
+                return this.children;
+            }
+        }
+
         public virtual string ToMarkdown(MarkdownTranslationContext ctx)
         {
             return String.Join("", children.Select(c => c.ToMarkdown(ctx)));
@@ -89,10 +97,16 @@ namespace DmlLib.Core.Nodes
             children.Add(element);
         }
 
+        public void InsertChild(int index, DmlElement element)
+        {
+            element.Parent = this;
+            children.Insert(index, element);
+        }
+
         public void MergeChildren(DmlElement elements)
         {
             elements.children.ForEach(n => n.Parent = this);
-            children.Add(elements);
+            elements.children.ForEach(children.Add);
         }
 
         public DmlElement LastChild()

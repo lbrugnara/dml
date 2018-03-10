@@ -56,7 +56,7 @@ namespace DmlLib.Core.Nodes
                 parts = parts.Skip(1).ToArray();
             }
             content = string.Join("\n", parts);
-            if ((int)Properties["level"] == 0)
+            if ((int)Properties["indents"] == 0)
                 content += "\n";
             return content;
         }

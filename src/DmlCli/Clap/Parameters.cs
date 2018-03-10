@@ -11,11 +11,16 @@ namespace DmlCli.Clap
     public class Parameters<TEnv> : KeyedCollection<string, Parameter<TEnv>>
         where TEnv : ClapEnv<TEnv>
     {
-        private List<Parameter<TEnv>> _parameters = new List<Parameter<TEnv>>();
+        private List<Parameter<TEnv>> parameters;
+
+        public Parameters()
+        {
+            parameters = new List<Parameter<TEnv>>();
+        }
 
         public string GetHelpMessage()
         {
-            return string.Join("\n", _parameters.Select(p => {
+            return string.Join("\n", parameters.Select(p => {
                 string name = string.Format("  {0}{1}{2}", p.ShortName, p.LongName != null ? "|":"", p.LongName);
                 string desc = string.Format("\t{0}", p.GetFormattedDescription(name.Length), p.Attributes.ToString());
                 string attrs = p.Attributes != ParamAttrs.None ? $" ({p.Attributes.ToString()})" : "";
@@ -26,21 +31,21 @@ namespace DmlCli.Clap
         public Parameter<TEnv> Add (string shortopt, string longopt, string description, Action<TEnv, string> handler, ParamAttrs attributes)
 		{
             var p = new Parameter<TEnv>(shortopt, longopt, description, handler, attributes);
-            _parameters.Add(p);
+            parameters.Add(p);
             return p;
         }
 
         public Parameter<TEnv> Add (string shortopt, string longopt, string description, Action<TEnv, string[]> handler, ParamAttrs attributes)
 		{
             var p = new Parameter<TEnv>(shortopt, longopt, description, handler, attributes);
-            _parameters.Add(p);
+            parameters.Add(p);
             return p;
         }
 
         public Parameter<TEnv> Add (string shortopt, string longopt, string description, Action<TEnv> action, ParamAttrs attributes)
 		{
             var p = new Parameter<TEnv>(shortopt, longopt, description, action, attributes);
-            _parameters.Add(p);
+            parameters.Add(p);
             return p;
         }
 
@@ -52,7 +57,7 @@ namespace DmlCli.Clap
         public bool Parse(TEnv env, string[] args)
         {
             List<Parameter<TEnv>> parsed = new List<Parameter<TEnv>>();
-            List<Parameter<TEnv>> parameters = _parameters.ToList();
+            List<Parameter<TEnv>> parameters = this.parameters.ToList();
             int index = 0;
             while (index < args.Length)
             {

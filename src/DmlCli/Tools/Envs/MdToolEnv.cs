@@ -13,6 +13,7 @@ namespace DmlCli.Tools.Envs
         public string OutputFile;
         public string TokensOutputFile;
         public int? Watch;
+        public bool Interactive;
         
         public MdToolEnv(Parameters<MdToolEnv> parmeters)
             : base (parmeters)
@@ -29,12 +30,13 @@ namespace DmlCli.Tools.Envs
 
         public override void ValidateParameters()
         {
-            if (InputFiles.Count == 0)
+            if (InputFiles.Count == 0 && !this.Interactive)
             {
                 Error = true;
                 Errors.Add(string.Format("No input files"));
                 return;
             }
+
             foreach (var inputFile in InputFiles)
             {
                 if (!File.Exists(inputFile))
@@ -42,6 +44,12 @@ namespace DmlCli.Tools.Envs
                     Error = true;
                     Errors.Add(string.Format("Input file '{0}' does not exist", inputFile));
                 }
+            }
+
+            if (this.Watch.HasValue && this.Interactive)
+            {
+                this.Error = true;
+                this.Errors.Add("Cannot use watch while in interactive mode");
             }
         }
     }

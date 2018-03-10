@@ -16,6 +16,7 @@ namespace DmlCli.Tools.Envs
         public bool AppendOutput;
         public string Document;
         public int? Watch;
+        public bool Interactive;
         public List<string> Styles = new List<string>();
         public List<string> Scripts = new List<string>();
         public List<string> Resources = new List<string>();
@@ -41,12 +42,13 @@ namespace DmlCli.Tools.Envs
 
         public override void ValidateParameters()
         {
-            if (InputFiles.Count == 0)
+            if (InputFiles.Count == 0 && !this.Interactive)
             {
                 Error = true;
                 Errors.Add(string.Format("No input files"));
                 return;
             }
+
             foreach (var inputFile in InputFiles)
             {
                 if (!File.Exists(inputFile))
@@ -54,6 +56,12 @@ namespace DmlCli.Tools.Envs
                     Error = true;
                     Errors.Add(string.Format("Input file '{0}' does not exist", inputFile));
                 }
+            }
+
+            if (this.Watch.HasValue && this.Interactive)
+            {
+                this.Error = true;
+                this.Errors.Add("Cannot use watch while in interactive mode");
             }
         }
     }

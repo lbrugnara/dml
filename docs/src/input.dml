@@ -43,7 +43,7 @@ A `paragraph` is the most basic element in [DML]. A chunk of text that does not
 start with a special characters is a `paragraph`. We can define it as a line that 
 starts with a non-special character and ends with [two] line breaks (`\n\n`).
 
-One line break (`\n`) in a paragraph, makes it continue in the next line:
+One line break (`\n`) in a paragraph, makes it continue in the same line:
 
 ```dml-source
 My first 
@@ -54,7 +54,7 @@ My second
 and third paragraphs
 ```
 
-The ´Two-NL´ rule applies when the previous paragraph does not finish with a dot (`.`). If that is the case, [DML] will insert
+The ´2NL´ rule applies when the previous paragraph does not finish with a dot (`.`). If that is the case, [DML] will insert
 a break between both sentences inside the same paragraph:
 
 ```dml-source
@@ -62,7 +62,7 @@ We are in the same block element (paragraph).
 But we are two different grammatical paragraphs.
 
 We are in the same block element (paragraph)
-and also in the same grammatical paragraphs, because we are separated just by one [NL].
+and also in the same grammatical paragraph, because we are separated just by one [NL].
 
 I'm a sentence in a block element.
 
@@ -89,6 +89,14 @@ Use underscores to __underline__ text and strikethrough to ~~cross out~~ a word
 ```dml-source
 Use backslash (`\\`) to escape emphasis like \[strong], \//italic//, \~~strikethrough~~ and
 \__underline__
+```
+
+With backslash it is also possible to escape `<` that is the start token for an HTML tag:
+
+```dml-source
+<strong>Strong HTML node</strong>
+
+\<strong>Not so strong HTML node\</strong>
 ```
 
 Escape block
@@ -225,7 +233,7 @@ the other two can be ommited or left blank:
 ```
 
 ```dml-source
-[[ ]] -> This is NOT a link
+[[ ]] -> This is NOT a link and neither is this one [[ | href ]] nor this one [[ || title ]]
 ```
 
 ```dml-source
@@ -248,17 +256,23 @@ To define a reference we use two pipes (`|`) and a colon (`:`). The structure is
 ```dml-source
 |one-ref: Reference 1.| One's reference
 
-|one-ref: //Reference [1].// | The reference `name` supports all the inline elemnts.
+|one-ref: //Reference [1].// | The reference's `name` supports all the inline elemnts.
 ```
 
 Images
 ------
 
 Similar to links, images start and end with tokens `[{` and `}]` and they also use pipes 
-(`|`) to separate the tag in sections: `[{ Hover text | Source URL | Alt text }]`
+(`|`) to separate the tag in sections: `[{ Source URL | Hover text | Alt text }]`
 
 ```dml-source
-[{ Much mind blown, such wow | content/img/mind_blown.gif | Mind blown}]
+[{ content/img/mind_blown.gif | Much mind blown, such wow | Mind blown}]
+```
+
+The only required section is the `URL`
+
+```dml-source
+[{ content/img/mind_blown.gif }] [{ | I'm not a valid image }]
 ```
 
 Lists
@@ -474,16 +488,6 @@ To add more //levels// you just need to append another `>` character:
 ```dml-source
 > My second blockquote
 >> And my first nested blockquote
-```
-
-The first `>` [must] be the first token in the line (after a line break). For nested levels,
-blockquotes accept white spaces between `>` characters:
-
-```dml-source
-> My second blockquote
-> > We 
->    > are all 
->              > The nested blockquote
 ```
 
 A blockquote supports ALL the elments of the [DML] language inside it:

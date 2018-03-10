@@ -30,16 +30,15 @@ namespace DmlCli
             };
 
             DmlCliEnv env = new DmlCliEnv(p);
+
             if (!env.ProcessEnvArguments(args))
-            {
                 return;
-            }
+
 
             ITool tool = ToolFactory.Create(env.Tool.Value);
+
             if (!tool.ProcessArguments(env.Args))
-            {
                 return;
-            }
             
             tool.Run();
         }

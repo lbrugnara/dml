@@ -5,54 +5,24 @@ namespace DmlLib.Core
 {
     public class ParsingContext
     {
-        private int _blockquoteLevel = 0;
-        private int _listLevel = 0;
-        private bool _processMarkupNodes;
+        public bool MarkupProcessingEnabled { get; private set; }
 
         public ParsingContext()
         {
-            _processMarkupNodes = true;
+            this.MarkupProcessingEnabled = true;
         }
 
-        public ParsingContext(ParsingContext cloneThis)
+        public ParsingContext(ParsingContext ctx)
         {
-            _processMarkupNodes = cloneThis._processMarkupNodes;
-            _blockquoteLevel = cloneThis._blockquoteLevel;
-            _listLevel = cloneThis._listLevel;
+            this.MarkupProcessingEnabled = ctx.MarkupProcessingEnabled;
         }
 
-        public void IncrementBlockquoteLevel (int l = 1)
+        public bool SwitchMarkupProcessingTo(bool val)
         {
-            _blockquoteLevel += l;
-        }
+            bool oldstate = this.MarkupProcessingEnabled;
+            this.MarkupProcessingEnabled = val;
 
-        public void DecrementBlockquoteLevel (int l = 1)
-        {
-            _blockquoteLevel -= l;
-        }
-
-        public int BlockquoteLevel { get { return _blockquoteLevel; } }
-
-        public void IncrementListLevel (int l = 1)
-        {
-            _listLevel += l;
-        }
-
-        public void DecrementListLevel (int l = 1)
-        {
-            _listLevel -= l;
-        }
-
-        public int ListLevel { get { return _listLevel; } }
-
-        public void MarkupProcessingEnabled(bool val)
-        {
-            _processMarkupNodes = val;
-        }
-
-        public bool IsMarkupProcessingEnabled()
-        {
-            return _processMarkupNodes;
+            return oldstate;
         }
     }
 }

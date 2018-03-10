@@ -6,6 +6,7 @@ namespace DmlLib.Core
     public enum TokenType
     {
         NewLine,
+        DoubleNewLine,
         Indentation,
         BoldOpen,
         BoldClose,
@@ -22,8 +23,8 @@ namespace DmlLib.Core
         HeaderEnd,
         ListItem,
         Pipe,
-        ReferenceStart,
-        ReferenceEnd, 
+        Reference,
+        Colon,
         LinkStart,
         LinkEnd,
         ImageStart,

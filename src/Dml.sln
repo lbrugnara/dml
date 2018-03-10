@@ -1,11 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26403.7
+VisualStudioVersion = 15.0.27130.2020
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DmlCli", "DmlCli\DmlCli.csproj", "{C9387351-90EC-4269-A63A-2B9E00B73ECA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DmlCli", "DmlCli\DmlCli.csproj", "{C9387351-90EC-4269-A63A-2B9E00B73ECA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DmlLib", "DmlLib\DmlLib.csproj", "{2A4B8350-9CB7-4ADF-B731-3DAB9FFAA35D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DmlLib", "DmlLib\DmlLib.csproj", "{2A4B8350-9CB7-4ADF-B731-3DAB9FFAA35D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,5 +24,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0E0CF06C-D678-4703-A8B3-9017987C5069}
 	EndGlobalSection
 EndGlobal

@@ -35,22 +35,23 @@ namespace DmlCli.Tools.Envs
 
         public bool ProcessEnvArguments(string[] args)
         {
-            Parse(args);
-            if (Error && !IsHelpMessageRequest())
+            this.Parse(args);
+
+            if (this.Error && !this.IsHelpMessageRequest())
             {
-                ShowErrorMessage();
+                this.ShowErrorMessage();
                 return false;
             }
             
-            if (IsHelpMessageRequest())
+            if (this.IsHelpMessageRequest())
             {
-                ShowHelpMessage();
+                this.ShowHelpMessage();
                 return false;
             }
 
-            if (Error)
+            if (this.Error)
             {
-                ShowErrorMessage();
+                this.ShowErrorMessage();
                 return false;
             }
 

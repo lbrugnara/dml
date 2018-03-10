@@ -9,31 +9,32 @@ namespace DmlCli.Clap
     public abstract class ClapEnv<TEnv>
         where TEnv : ClapEnv<TEnv>
     {
-        private Parameters<TEnv> _parameters;
-        public bool Error;
-        public List<string> Errors = new List<string>();
+        private Parameters<TEnv> parameters;
         protected bool showHelp;
-
         protected bool disableValidation;
+
+        public bool Error { get; set; }
+        public List<string> Errors { get; set; }
 
         public ClapEnv(Parameters<TEnv> parameters)
         {
-            _parameters = parameters;
+            this.parameters = parameters;
+            this.Errors = new List<string>();
         }
 
         public bool Parse(string[] args)
         {
-            bool parsingSucceeded = _parameters.Parse(this as TEnv, args);
+            bool parsingSucceeded = parameters.Parse(this as TEnv, args);
             if (parsingSucceeded)
             {
-                ValidateParameters();
+                this.ValidateParameters();
             }
             return parsingSucceeded;
         }
 
         public string GetHelpMessage()
         {
-            return _parameters.GetHelpMessage();
+            return parameters.GetHelpMessage();
         }
 
         public bool IsHelpMessageRequest()
@@ -60,17 +61,22 @@ namespace DmlCli.Clap
 
         public void ShowErrorMessage()
         {
-            string beforeerrors = OnBeforeErrorMessages();
             List<string> errors = new List<string>();
+
+            string beforeerrors = this.OnBeforeErrorMessages();
+
             foreach (string err in Errors)
             {
-                string beforeerror = OnBeforeErrorMessage();
-                string error = OnErrorMessage(err);
-                string aftererror = OnAfterErrorMessage();
+                string beforeerror = this.OnBeforeErrorMessage();
+                string error = this.OnErrorMessage(err);
+                string aftererror = this.OnAfterErrorMessage();
+
                 errors.Add(beforeerror + error + aftererror);
             }
-            string aftererrors = OnAfterErrorMessages();
-            OnShowErrorMessage(beforeerrors + string.Join("\n", errors) + aftererrors);
+
+            string aftererrors = this.OnAfterErrorMessages();
+
+            this.OnShowErrorMessage(beforeerrors + string.Join("\n", errors) + aftererrors);
         }
 
         protected virtual string OnBeforeErrorMessages()
@@ -106,10 +112,11 @@ namespace DmlCli.Clap
         // Help message
         public void ShowHelpMessage()
         {
-            string beforehelp = OnBeforeHelpMessage();
-            string help = OnHelpMessage(_parameters.GetHelpMessage());
-            string afterhelp = OnAfterHelpMessage();
-            OnShowHelpMessage(beforehelp + help + afterhelp);
+            string beforehelp = this.OnBeforeHelpMessage();
+            string help = this.OnHelpMessage(parameters.GetHelpMessage());
+            string afterhelp = this.OnAfterHelpMessage();
+
+            this.OnShowHelpMessage(beforehelp + help + afterhelp);
         }
 
         protected virtual string OnBeforeHelpMessage()

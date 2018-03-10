@@ -1,302 +1,401 @@
-// Copyright (c) Leonardo Brugnara
-// Full copyright and license information in LICENSE file
-
+﻿using DmlLib.Core.Nodes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using DmlLib.Core.Nodes;
+using System.Text;
 
 namespace DmlLib.Core
 {
     public class Parser
     {
-        private Lexer lexer;
-        private delegate DmlElement ElementParser(ParsingContext ctx);
+        private delegate void ElementParser(ParsingContext ctx);
 
-        public Lexer Lexer
+        // Contains all the parser for block elements like headers, paragraphs, list items, etc
+        private Dictionary<TokenType, ElementParser> BlockElementParsers;
+
+        // Contains all the parser for inline elements like bold, italic, etc
+        private Dictionary<TokenType, ElementParser> InlineElementParsers;
+
+        private List<Token> Tokens { get; set; }
+
+        private int Pointer { get; set; }
+
+        // The ElementParsers manipulate the list while creating new nodes
+        private LinkedList<DmlElement> Output { get; set; }
+
+        #region Constructors
+
+        public Parser()
         {
-            get
+            // Initialize the stack
+            this.Output = new LinkedList<DmlElement>();
+
+            // Register the block elements parser
+            this.BlockElementParsers = new Dictionary<TokenType, ElementParser>()
             {
-                return lexer;
-            }
+                { TokenType.HeaderStart,    this.ParseHeader        },
+                { TokenType.Blockquote,     this.ParseBlockquote    },
+                { TokenType.CodeBlock,      this.ParseCodeBlock     },
+                { TokenType.Preformatted,   this.ParsePreformatted  },
+                { TokenType.Indentation,    this.ParsePreformatted  },
+                { TokenType.Reference, this.ParseReference     },
+                { TokenType.ListItem,       this.ParseList          },
+                { TokenType.ThematicBreak,  this.ParseThematicBreak },
+                { TokenType.NewLine,        this.ParseNewLine       }
+            };
+
+            // Register the ineline elements parsers
+            this.InlineElementParsers = new Dictionary<TokenType, ElementParser>()
+            {
+                { TokenType.Text,           this.ParseText          },
+                { TokenType.EscapeBlock,    this.ParseEscapeBlock   },
+                { TokenType.Escape,         this.ParseEscape        },
+                { TokenType.LinkStart,      this.ParseLink          },
+                { TokenType.ImageStart,     this.ParseImage         },
+                { TokenType.BoldOpen,       this.ParseBold          },
+                { TokenType.Italic,         this.ParseItalic        },
+                { TokenType.Underlined,     this.ParseUnderline     },
+                { TokenType.Strikethrough,  this.ParseStrikethrough },
+                { TokenType.InlineCode,     this.ParseInlineCode    },
+                { TokenType.NewLine,        this.ParseNewLine       },
+
+            };
         }
 
-        public DmlDocument Parse(string doc, ParsingContext ctx = null)
+        #endregion
+
+        #region Public API
+
+        public DmlDocument Parse(string source, ParsingContext ctx = null)
         {
-            lexer = new Lexer(doc);
-            return ParseDocument(ctx ?? new ParsingContext());
+            // Create a new Lexer for this parsing session
+            var lexer = new Lexer(source);
+
+            this.Tokens = lexer.Tokenize();
+            this.Pointer = 0;
+
+            // Call the root parser
+            var document = this.ParseDocument(ctx ?? new ParsingContext());
+
+            this.Tokens = null;
+
+            return document;
         }
 
-        public DmlDocument Parse(List<Token> tokens, ParsingContext ctx = null)
+        public DmlDocument Parse(List<Token> source, ParsingContext ctx = null)
         {
-            lexer = new Lexer(tokens);
-            return ParseDocument(ctx ?? new ParsingContext());
+            this.Tokens = source;
+            this.Pointer = 0;
+
+            // Call the root parser
+            var document = this.ParseDocument(ctx ?? new ParsingContext());
+
+            this.Tokens = null;
+
+            return document;
         }
 
+        #endregion
+
+        #region Private helpers
+
+        private bool HasTokens => this.Pointer < this.Tokens.Count;
+
+        private Token PeekToken(int offset = 0) => this.Tokens.ElementAtOrDefault(this.Pointer + offset);
+
+        private Token ConsumeToken() => this.Tokens.ElementAtOrDefault(this.Pointer++);
+
+        private DmlElement PopElement()
+        {
+            var last = this.Output.Last();
+
+            this.Output.RemoveLast();
+
+            return last;
+        }
+
+        private LinkedListNode<DmlElement> AddAfterElement(LinkedListNode<DmlElement> lastNode, DmlElement element)
+        {
+            if (lastNode == null)
+                this.Output.AddFirst(element);
+            else
+                this.Output.AddAfter(lastNode, element);
+
+            return this.Output.FindLast(element);
+        }
+
+        private ElementParser GetBlockParser(ParsingContext ctx, Token token)
+        {
+            return this.BlockElementParsers.ContainsKey(token.Type) ? this.BlockElementParsers[token.Type] : this.ParseParagraph;
+        }
+
+        private ElementParser GetInlineParser(ParsingContext ctx, Token token, bool escape = true)
+        {
+            if (escape && token.Type == TokenType.Escape)
+                return this.ParseEscape;
+
+            return ctx.MarkupProcessingEnabled && this.InlineElementParsers.ContainsKey(token.Type) ? this.InlineElementParsers[token.Type] : this.ParseText;
+        }
+
+        #endregion
+
+        #region Block parsers
+
+        /// <summary>
+        /// Creates a new DmlDocument using the current input 
+        /// held by the Lexer property
+        /// Caller must ensure Lexer is instantiated
+        /// </summary>
+        /// <param name="ctx"></param>
+        /// <returns></returns>
         private DmlDocument ParseDocument(ParsingContext ctx)
         {
-            DmlDocument doc = new DmlDocument();
-            ConsumeWhiteSpaces();
-            Token token;
-            while ((token = lexer.PeekToken()) != null)
+            // Get the block element parser and invoke the method
+            // with the provided ParsingContext
+            while (this.HasTokens)
             {
-                if (token.Type == TokenType.NewLine)
+                if (this.PeekToken().Type == TokenType.DoubleNewLine)
                 {
-                    // If next token is a NewLine token, check for another NewLine after it
-                    Token firstnl = lexer.NextToken();
-                    token = lexer.PeekToken();
-                    // If the second token is null or different from NL, set the consumed NewLine to `token`
-                    // again to process it. If next token is a NL, do not do anything, we already removed
-                    // the first NL, continue in the blockquote 
-                    if (token == null || token.Type != TokenType.NewLine)
-                    {
-                        // Remove whitespaces following the new line
-                        ConsumeWhiteSpaces();
-                        token = firstnl;
-                        lexer.RestoreToken(token);
-                    }
-                }
-                else if (token != null && token.IsNotRepresentable)
-                {
-                    lexer.NextToken();
+                    this.ConsumeToken();
                     continue;
                 }
-                ProcessChildElement(doc.Body, GetBlockNodeParser(ctx, token), ctx);
+
+                this.GetBlockParser(ctx, this.PeekToken())(ctx);
             }
+
+            DmlDocument doc = new DmlDocument();
+
+            // Consume all the items that remain in the NodeStack
+            // all of them are children of the DmlDocument object
+            while (this.Output.Count > 0)
+                doc.Body.InsertChild(0, this.PopElement());
+
             return doc;
         }
 
-        private ElementParser GetBlockNodeParser(ParsingContext ctx, Token t)
-        {
-            switch (t.Type)
-            {
-                case TokenType.NewLine:
-                    return ParseText;
-                case TokenType.Blockquote:
-                    return ParseBlockquote;
-                case TokenType.HeaderStart:
-                    return ParseHeader;
-                case TokenType.ListItem:
-                    return ParseList;
-                case TokenType.Indentation:
-                case TokenType.Preformatted:
-                    return ParsePreformatted;
-                case TokenType.ThematicBreak:
-                    return ParseThematicBreak;
-                case TokenType.CodeBlock:
-                {
-                    Token tkn = lexer.PeekToken(1);
-                    if (tkn != null && tkn.Type == TokenType.CodeBlockLang && tkn.Value == "dml-source")
-                    {
-                        return ParseDmlSource;
-                    }
-                    return ParseCodeBlock;
-                }
-            }
-            if (ctx.BlockquoteLevel > 0)
-                return ParseBlockquoteParagraph;
-            return ParseParagraph;
-        }
-
         /// <summary>
-        /// Returns an specific parser based on the token type
+        /// 
         /// </summary>
-        /// <param name="t">Token to check the type to return the specific parser</param>
-        /// <returns>Pointer to a method that can parse the specific node</returns>
-        private ElementParser GetInlineNodeParser(ParsingContext ctx, Token t)
+        /// <param name="ctx"></param>
+        private void ParseParagraph(ParsingContext ctx)
         {
-            if (!ctx.IsMarkupProcessingEnabled())
+            while (this.HasTokens)
             {
-                /*if (t.Type == TokenType.Escape)
+
+                // Break on 2NL
+                if (this.PeekToken().Type == TokenType.DoubleNewLine)
                 {
-                    Token nextToEscape = lexer.PeekToken(1);
-                    if (nextToEscape != null && nextToEscape.Type != TokenType.Text)
+                    this.ConsumeToken();
+                    break;
+                }
+
+                var token = this.PeekToken();
+
+                // If it is not an inline element we need to check
+                // if we can process it with ParseText or just break the
+                // loop.
+                // If the token type cannot be parsed by a block parser, we
+                // just add it as plain text, if not, we break the loop.
+                if (!this.InlineElementParsers.ContainsKey(token.Type))
+                {
+                    if (!this.BlockElementParsers.ContainsKey(token.Type))
                     {
-                        lexer.NextToken();
+                        this.ParseText(ctx);
+                        continue;
                     }
-                }*/
-                return ParseText;
+                    break;
+                }
+
+                this.InlineElementParsers[token.Type].Invoke(ctx);
+
+                // If the token value ends with a dot and the next token we have to process is a NL
+                // we need to add a line break to honor the grammatical paragraph
+                if (token.Value?.EndsWith(".") == true && this.PeekToken()?.Type == TokenType.NewLine)
+                    this.Output.AddLast(new LineBreakNode());
             }
-            switch(t.Type)
+
+            // Create new paragraph, add childs and add it to
+            // the temporal output
+            ParagraphNode paragraph = new ParagraphNode();
+
+            // Because paragraphs can be divided by NewLines we need
+            // to run nested loops to process them
+            while (this.Output.Any())
             {
-                case TokenType.Text:
-                case TokenType.NewLine:
-                    return ParseText;
-                case TokenType.BoldOpen:
-                    return ParseBold;
-                case TokenType.Italic:
-                    return ParseItalic;
-                case TokenType.InlineCode:
-                    return ParseInlineCode;
-                case TokenType.Underlined:
-                    return ParseUnderlined;
-                case TokenType.Strikethrough:
-                    return ParseStrikethrough;
-                case TokenType.Blockquote:
-                    return ParseBlockquote;
-                case TokenType.Preformatted:
-                    return ParsePreformatted;
-                case TokenType.LinkStart:
-                    return ParseLink;
-                case TokenType.ImageStart:
-                    return ParseImage;
-                case TokenType.EscapeBlock:
-                    return ParseEscapeBlock;
-                case TokenType.ReferenceStart:
-                    return ParseReference;
-                case TokenType.Escape:
-                    return ParseEscape;
-                case TokenType.ListItem:
-                    return ParseList;
+                // If next is a block element, we don't need to add a paragraph
+                if (this.Output.Last().ElementType.IsBlockElement())
+                    break;
+
+                // Add a child to the current paragrapg
+                paragraph.InsertChild(0, this.PopElement());
             }
-            return ParseText;
+
+            this.Output.AddLast(paragraph);
         }
 
-        private DmlElement ParseEscape(ParsingContext ctx)
+        private int GetBlockquoteLevel(Token tkn)
         {
-            lexer.NextToken();
-            Token nextToEscape = lexer.PeekToken();
-            if (nextToEscape != null && nextToEscape.Type != TokenType.Text)
-            {
-                return ParseText(ctx);
-            }
-            return new TextNode("\\");
-        }
+            if (tkn?.Type != TokenType.Blockquote)
+                return -1;
 
-        private DmlElement ParseThematicBreak(ParsingContext ctx)
-        {
-            lexer.NextToken();            
-            return new ThematicBreakNode();
+            return tkn.Value?.Length ?? -1;
         }
 
         private void ConsumeWhiteSpaces()
         {
-            Token token;            
-            while ((token = lexer.PeekToken()) !=  null)
+            while (this.HasTokens)
             {
+                var token = this.PeekToken();
+
                 if (token.Type != TokenType.Text || token.Value.Trim() != string.Empty)
                     break;
-                lexer.NextToken();
+
+                this.ConsumeToken();
             }
         }
 
-        private int GetNextBlockquoteLevel()
+        private void ParseBlockquote(ParsingContext ctx)
         {
-            int level = 0;
-            Stack<Token> consumed = new Stack<Token>();
-            Token token;
-            while ((token = lexer.PeekToken()) !=  null)
+            // Our ParseBlockquote needs to know the previos blockquote level and the target
+            // level to work as expected
+            this.ParseBlockquote(ctx, this.GetBlockquoteLevel(this.PeekToken()), 0);
+        }
+
+        private void ParseBlockquote(ParsingContext ctx, int targetLevel, int previousLevel)
+        {
+            BlockquoteNode bq = new BlockquoteNode();
+
+            // We can add the blockquote here, because of how the parsing method
+            // is designed, we will not modify Output inside ParseBlockquote except
+            // by current blockquote (this very line)
+            this.Output.AddLast(bq);
+
+            // While the target level is not the immediate next
+            // level, resolve the next level first
+            if (targetLevel > previousLevel + 1)
             {
-                if (token.Type != TokenType.Blockquote && (token.Type != TokenType.Text || token.Value.Trim() != string.Empty))
+                // This will parse the next level recursively until reach
+                // previousLevel == targetLevel -1
+                this.ParseBlockquote(ctx, targetLevel, previousLevel + 1);
+
+                // Populate the current blockquote with the parsed child
+                bq.Children.Add(this.PopElement());
+            }
+
+            // If next token is not a blockquote, it means this blockquote
+            // is finished, not need to parse anything else
+            if (this.PeekToken()?.Type != TokenType.Blockquote)
+                return;
+
+            // Next token is a Blockquote, but we need to compute the current
+            // level before continue
+            var currentLevel = this.GetBlockquoteLevel(this.PeekToken());
+
+            // If the current level is less or equals than previous level
+            // we don't need to make anything else here
+            if (currentLevel <= previousLevel)
+                return;
+
+            // Here we start to parse the current block quote
+            // Consume the blockquote token and clean the whitespaces
+            this.ConsumeToken();
+            this.ConsumeWhiteSpaces();
+
+            // We compute the source of the blockquote, taking
+            // the Token.OriginalValue or Token.Value, removing the
+            // Blockquote tokens with the same nesting level, and
+            // processing the children blockquote, that way we give
+            // support to blockquotes to contain any type of markup
+            // element
+            StringBuilder blockquoteSourceCode = new StringBuilder();
+
+            // We will need a Parser
+            Parser parser = new Parser();            
+
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // If we find a 2NL, we break the blockquote
+                if (token.Type == TokenType.DoubleNewLine)
                     break;
-                if (token.Type == TokenType.Blockquote)
-                    level++;
-                consumed.Push(lexer.NextToken());
-            }
-            while (consumed.Count > 0 && (token = consumed.Pop()) != null)
-            {
-                lexer.RestoreToken(token);
-            }
-            return level;
-        }
 
-        private void TryConsumeBlockquoteTokens(int c)
-        {
-            Token token;
-            while (c > 0 && (token = lexer.PeekToken()) != null)
-            {
+                // When the token is not a blockquote, we just need
+                // to append the token's value to the StringBuilder
                 if (token.Type != TokenType.Blockquote)
-                    break;
-                if (token.Type == TokenType.Blockquote)
-                    c--;
-                lexer.NextToken();
-            }
-        }
-
-        private DmlElement ParseBlockquote(ParsingContext ctx)
-        {
-            // Consume >
-            Token bq = lexer.NextToken();
-            int increment = bq.Value.Where(c => c != ' ').Select(c => c).Count() - ctx.BlockquoteLevel;
-            ctx.IncrementBlockquoteLevel(increment);
-
-            BlockquoteNode quote = new BlockquoteNode();
-            quote.Properties["index"] = ctx.BlockquoteLevel;
-            DmlElement childElement = new ParagraphNode();
-            Token token;
-
-            while ((token = lexer.PeekToken()) != null)
-            {
-                if (token.Type == TokenType.BlockquoteEndMarker)
                 {
-                    lexer.NextToken();
-                    break;
-                }
-                else if (token.Type == TokenType.NewLine)
-                {
-                    Token nl = lexer.NextToken();
-                    token = lexer.PeekToken();
-                    if (token == null)
-                    {
-                        break;
-                    }
-                    if (token.Value != null && !token.Value.StartsWith(" "))
-                    {
-                        Token prev = lexer.Output.Count > 1 ? lexer.Output.ElementAtOrDefault(lexer.Output.Count - 2) : null;
-                        if (prev == null || prev.Value == null || !prev.Value.EndsWith(" "))
-                            childElement.AddChild(new TextNode(" "));
-                    }
-                    if (token.Type == TokenType.NewLine)
-                    {
-                        lexer.NextToken();
-                        if (childElement.HasChildren())
-                        {
-                            quote.AddChild(childElement);
-                        }
-                        quote.AddChild(new TextNode("\n"));
-                        childElement = new ParagraphNode();
-                        continue;
-                    }
+                    token = this.ConsumeToken();
+                    blockquoteSourceCode.Append(token.OriginalValue ?? token.Value);
                     continue;
                 }
 
-                // Find a parser method for the token type and get the generated HtmlElement
-                var parser = GetBlockNodeParser(ctx, token);
-                // Block elements goes at <blockquote> level, rest of elements in a paragraph
-                if (parser == ParseBlockquote 
-                    || parser == ParseList 
-                    || parser == ParseHeader 
-                    || parser == ParsePreformatted 
-                    || parser == ParseCodeBlock
-                    || parser == ParseDmlSource)
+                // If it is a blockquote, we need to get the nesting level
+                // of the blockquote
+                int newLevel = this.GetBlockquoteLevel(token);
+
+                // If the next level is lesser than the current one (its parent)
+                // it means we need to close the current blockquote
+                if (newLevel < currentLevel)
+                    break;
+
+                // If the levels are equals, we just ignore
+                // the Blockquote token and consume the whitespace
+                // between the Blockquote token and the next one
+                if (newLevel == currentLevel)
                 {
-                    if (childElement.HasChildren())
-                    {
-                        quote.AddChild(childElement);
-                        quote.AddChild(new TextNode("\n"));
-                        childElement = new ParagraphNode();
-                    }
-                    ProcessChildElement(quote, parser, ctx);
+                    this.ConsumeToken();
+                    this.ConsumeWhiteSpaces();
+                    continue;
                 }
-                else
-                {
-                    ProcessChildElement(childElement, parser, ctx);
-                }
-            }
-            if (childElement.HasChildren())
-            {
-                quote.AddChild(childElement);
-                quote.AddChild(new TextNode("\n"));
+
+                // Finally, if the next level is greater than the current one,
+                // it means we found a child blockquote, we need to parse all the source
+                // we found until this moment, add the processed nodes to the current
+                // blockquote, process the child blockquote, and finally add it to the
+                // current one
+                if (blockquoteSourceCode.Length > 0)
+                    parser.Parse(blockquoteSourceCode.ToString()).Body.Children.ForEach(c => bq.AddChild(c));
+
+                // Clear the SB as we already parsed the content
+                blockquoteSourceCode.Clear();
+
+                // Process the child BQ
+                this.ParseBlockquote(ctx, newLevel, currentLevel);
+
+                // Add the child BQ to the current one
+                bq.Children.Add(this.PopElement());
             }
 
-            ctx.DecrementBlockquoteLevel(increment);
-            return quote;
+            // If there is source code available, parse the remaining source andd
+            // add the children to the current blockquote
+            if (blockquoteSourceCode.Length > 0)
+                parser.Parse(blockquoteSourceCode.ToString()).Body.Children.ForEach(c => bq.AddChild(c));
         }
 
-        private DmlElement ParseHeader(ParsingContext ctx)
+        private void ParseThematicBreak(ParsingContext ctx)
         {
-            Token t = lexer.NextToken();
+            this.ConsumeToken();
+            this.Output.AddLast(new ThematicBreakNode());
+
+            if (!this.HasTokens)
+                return;
+
+            // If next is a 2NL let caller handle it
+            if (this.PeekToken().Type == TokenType.DoubleNewLine)
+                return;
+
+            // If just one new line is used, consume it
+            if (this.PeekToken()?.Type == TokenType.NewLine)
+                this.ConsumeToken();
+        }
+
+        private void ParseHeader(ParsingContext ctx)
+        {
+            Token token = this.ConsumeToken();
+
             HeaderType headerType = HeaderType.H1;
-            switch (t.Value[0])
+
+            switch (token.Value[0])
             {
                 case '~':
                     headerType = HeaderType.H2;
@@ -308,746 +407,893 @@ namespace DmlLib.Core
                     headerType = HeaderType.H4;
                     break;
             }
+
             HeaderNode header = new HeaderNode(headerType);
 
-            Token et = null;
-            while ((et = lexer.PeekToken()) != null && et.Type != TokenType.HeaderEnd)
-            {
-                if (et.Type == TokenType.NewLine && lexer.PeekToken(1).Type == TokenType.HeaderEnd)
-                {
-                    lexer.NextToken();
-                    continue;
-                }
-                ProcessChildElement(header, GetInlineNodeParser(ctx, et), ctx);
-            }
-            lexer.NextToken(); // Consume HeaderEnd token
-            return header;
-        }
-
-        private int GetNextListLevel()
-        {
-            int levels = 0;
-            Token tmp;
-            while ((tmp = lexer.PeekToken(levels)) != null && tmp.Type == TokenType.Indentation)
-            {
-                levels++;
-            }
-            return levels;
-        }
-
-        private DmlElement ParseList(ParsingContext ctx)
-        {
-            Token tkn = lexer.PeekToken();
+            // Consume last parsed element as it has to be
+            // the header's content
+            header.MergeChildren(this.PopElement());
             
-            ListType listType = ListType.Unordered;
-            if (tkn.Value == "# ")
-            {
-                listType = ListType.Ordered;
-            }
-            else if (tkn.Value.StartsWith("["))
-            {
-                listType = ListType.Todo;
-            }
-
-            GroupNode group = new GroupNode();
-            ListNode list = new ListNode(listType);
-            list.Properties["level"] = ctx.ListLevel;
-            int childindex = 1;
-
-            int? lastIndex = null;
-            if (listType == ListType.Ordered && tkn.OriginalValue != null)
-            {
-                //lastIndex = int.Parse(tkn.OriginalValue.Substring(0, tkn.OriginalValue.Length-2));
-                //childindex = lastIndex.Value;
-                list.Attributes["start"] = tkn.OriginalValue.Substring(0, tkn.OriginalValue.Length-2);
-                childindex = int.Parse(list.Attributes["start"]);
-            }
-
-            Token t = null;
-            while ((t = lexer.PeekToken()) != null)
-            {
-                if (t.Type == TokenType.ListItem)
-                {
-                    int? curIndex = null;
-                    if (t.Value == "# " && t.OriginalValue != null)
-                    {
-                        curIndex = int.Parse(t.OriginalValue.Substring(0, t.OriginalValue.Length-2));
-                    }
-                    bool breakNumberedList = (lastIndex.HasValue && (!curIndex.HasValue || curIndex <= lastIndex || curIndex > lastIndex+1));
-                    if (t.Value[0] != tkn.Value[0] || breakNumberedList)
-                    {                        
-                        group.AddChild(list);
-                        list = new ListNode(listType);
-                        list.Properties["level"] = ctx.ListLevel;
-                        if (curIndex.HasValue)
-                        {
-                            childindex = curIndex.Value;
-                            list.Attributes["start"] = curIndex.Value.ToString();
-                        }
-                    }
-                    lastIndex = curIndex;
-                    lexer.NextToken();
-                    DmlElement li = null;
-                    if (t.Value[0] == '[')
-                    {
-                        li = new TodoListItemNode(t.Value.ToLower()[1] == 'x');
-                    }
-                    else
-                    {
-                        li = new ListItemNode();
-                        li.Properties["index"] = childindex++;
-                    }
-                    list.AddChild(li);
-                    Token nt = lexer.PeekToken();
-                    if (nt == null)
-                        break;
-                    ProcessChildElement(li, GetInlineNodeParser(ctx, nt), ctx);
-                }
-                else if (t.Type == TokenType.NewLine)
-                {
-                    Token tmp = lexer.NextToken();
-                    t = lexer.PeekToken();
-                    
-                    if (t == null || t.Type == TokenType.NewLine)
-                    {
-                        lexer.RestoreToken(tmp);
-                        break;
-                    }
-                    else if (t.Type == TokenType.ListItem)
-                    {
-                        if (t.Value[0] != tkn.Value[0])
-                        {
-                            if (ctx.ListLevel > 0)
-                            {
-                                // Handle the NewLine in the previous call
-                                lexer.RestoreToken(tmp);
-                            }
-                            break;
-                        }
-                        if (ctx.ListLevel > 0)
-                        {
-                            // Handle the NewLine in the previous call
-                            lexer.RestoreToken(tmp);
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        // Add an space between works in line continuations
-                        var li = list.LastChild();
-                        if (li == null) break;
-                        li.AddChild(new TextNode(" "));
-                    }
-                }
-                else if (t.Type == TokenType.Indentation)
-                {
-                    int curLevel = ctx.ListLevel;
-                    int nextLevel = GetNextListLevel();
-                    if (nextLevel < curLevel)
-                    {
-                        break;
-                    }
-                    else if (nextLevel > curLevel)
-                    {
-                        lexer.ConsumeTokens(nextLevel);
-                        ParsingContext ctx2 = new ParsingContext(ctx);
-                        ctx2.IncrementListLevel(nextLevel - curLevel);
-                        DmlElement item = ParseList(ctx2);
-                        var li = list.LastChild();
-                        if (li == null)
-                        {
-                            continue;
-                        }
-                        li.AddChild(item);
-                    }
-                    else
-                    {
-                        lexer.ConsumeTokens(nextLevel);
-                    }
-                }
-                else
-                {
-                    var li = list.LastChild();
-                    if (li == null)
-                    {
-                        break;
-                    }
-                    ProcessChildElement(li, GetInlineNodeParser(ctx, t), ctx);
-                }
-            }
-            group.AddChild(list);
-            return group;
-        }
-        private DmlElement ParseParagraph(ParsingContext ctx)
-        {
-            ParagraphNode paragraph = new ParagraphNode();
-            ConsumeWhiteSpaces();
-            Token token;
-            while ((token = lexer.PeekToken()) != null)
-            {
-                if (token.Type == TokenType.Blockquote)
-                {
-                    break;
-                }
-                // We need to handle new lines in paragraph. If token is TokenType.NewLine,
-                // child is a TextNode with a new line character on it.
-                else if (token.Type == TokenType.NewLine)
-                {
-                    // If next token is a NewLine token, check for another NewLine after it
-                    Token firstnl = lexer.NextToken();
-                    token = lexer.PeekToken();
-                    // If the second token is null, set the consumed NewLine to `token` again to process
-                    // it and in the next iteration, break the execution of this method.
-                    if (token == null || token.Type != TokenType.NewLine)
-                    {
-                        if (token != null && token.Value != null)
-                        {
-                            // Take nth-2 because nth-1 is the consumed NL
-                            Token prev = lexer.Output.Count > 1 ? lexer.Output.ElementAtOrDefault(lexer.Output.Count - 2) : null;
-                            if (prev == null || prev.Value == null)
-                                continue;
-                            if (prev.Value.Trim().EndsWith("."))
-                            {
-                                paragraph.AddChild(new LineBreakNode());
-                            }
-                            else if (!token.Value.StartsWith(" ") && !prev.Value.EndsWith(" "))
-                            {
-                                paragraph.AddChild(new TextNode(" "));
-                            }
-                        }
-                        continue;
-                    }
-                    else if (token.Type == TokenType.NewLine)
-                    {
-                        break;
-                    }
-                }
-
-                // Find a parser method for the token type and get the generated HtmlElement
-                ProcessChildElement(paragraph, GetInlineNodeParser(ctx, token), ctx);
-            }
-            return paragraph;
+            this.Output.AddLast(header);
         }
 
-        /// <summary>
-        /// Replaces ParseParagraph method when the current Block element is a Blockquote. Instead of using a ParagraphNode,
-        /// this method uses a GroupNode, letting ParseBlockquote to decide when to close the current Paragraph based on the
-        /// NewLines, to keep the 2-NL rule on paragraphs
-        /// </summary>
-        /// <param name="ctx"></param>
-        /// <returns></returns>
-        private DmlElement ParseBlockquoteParagraph(ParsingContext ctx)
+        private void ParseCodeBlock(ParsingContext ctx)
         {
-            GroupNode paragraph = new GroupNode();
-            Token token;
-            while ((token = lexer.PeekToken()) != null)
+            // If the CodeBlock is a DmlSource code block, leave this basic code block
+            if (this.PeekToken(1)?.Type == TokenType.CodeBlockLang && this.PeekToken(1)?.Value == "dml-source")
             {
-                // We need to handle new lines in paragraph. If token is TokenType.NewLine,
-                // child is a TextNode with a new line character on it.
-                if (token.Type == TokenType.NewLine || token.Type == TokenType.BlockquoteEndMarker)
-                {
-                    break;
-                }
-                // Find a parser method for the token type and get the generated HtmlElement
-                ProcessChildElement(paragraph, GetInlineNodeParser(ctx, token), ctx);
-            }
-            return paragraph;
-        }
-
-        private DmlElement ParsePreformatted(ParsingContext ctx)
-        {
-            lexer.NextToken();
-            bool tmp = ctx.IsMarkupProcessingEnabled();
-            ctx.MarkupProcessingEnabled(false);
-            PreformattedNode pre = new PreformattedNode();
-            CodeNode code = new CodeNode(true);
-            Token token;
-            while ((token = lexer.PeekToken()) != null)
-            {
-                if (token.Type == TokenType.NewLine)
-                {
-                    Token nl = lexer.NextToken();
-                    token = lexer.PeekToken();
-                    if (token == null || token.Type == TokenType.NewLine)
-                    {
-                        lexer.RestoreToken(nl);
-                        break;
-                    }
-                    else if (token != null && token.Type == TokenType.Indentation)
-                    {
-                        lexer.NextToken();
-                    }
-                    code.AddChild(new TextNode(nl.Value));
-                    continue;
-                }
-                else if (token != null && token.Type == TokenType.Preformatted)
-                {
-                    lexer.NextToken();
-                    continue;
-                }
-                code.AddChild(ParseText(ctx));
-                //ProcessChildElement(code, GetInlineNodeParser(ctx, token), ctx);
-            }
-            ctx.MarkupProcessingEnabled(tmp);
-            pre.AddChild(code);
-            return pre;
-        }
-
-        private DmlElement ParseCodeBlock(ParsingContext ctx)
-        {
-            Token codeBlockTkn = lexer.NextToken();
-            bool tmp = ctx.IsMarkupProcessingEnabled();
-            ctx.MarkupProcessingEnabled(codeBlockTkn.Value.StartsWith("!"));
-            PreformattedNode pre = new PreformattedNode();
-            CodeNode code = new CodeNode(true);
-            
-            Token token = lexer.NextToken(); // Consume the NL or the CodeBlockLang
-
-            if (token == null)
-            {
-                return code;
+                this.ParseDmlSource(ctx);
+                return;
             }
 
-            if (token.Type == TokenType.CodeBlockLang)
+            // Get a reference to the last node in the linked list
+            // before doing anything related to this inline element
+            var lastNode = this.Output.Last;
+
+            // Save the starting token
+            Token startToken = this.ConsumeToken();
+
+            // If the code block starts with !```, it is a code block that
+            // allows markup processing, if not, it is a basic block code.
+            // Save the current state of the markup processing
+            bool oldMarkupProcessingState = ctx.SwitchMarkupProcessingTo(startToken.Value.StartsWith("!"));
+
+            Token token = this.ConsumeToken(); // Consume the NL or the CodeBlockLang
+
+            // If next token is the CodeBlockLang, consume it and save
+            // the value to be used in the class attribute
+            string lang = null;
+            if (token?.Type == TokenType.CodeBlockLang)
             {
-                    lexer.NextToken(); // NL
-                    code.Attributes["class"] = token.Value;
+                this.ConsumeToken(); // NL
+                lang = token.Value;
             }
 
-            while ((token = lexer.PeekToken()) != null)
+            while (this.HasTokens)
             {
+                token = this.PeekToken();
+
+                // End the loop if the closing token is found
                 if (token.Type == TokenType.CodeBlock)
                 {
-                    lexer.NextToken();
+                    this.ConsumeToken();
                     break;
                 }
-                else if (token.Type == TokenType.Escape)
+
+                // If the escaped token is a CodeBlock, ignore the Escape token and consume the CodeBlock
+                if (token.Type == TokenType.Escape && this.PeekToken(1)?.Type == TokenType.CodeBlock)
                 {
-                    Token nextToEscape = lexer.PeekToken(1);
-                    if (nextToEscape != null && nextToEscape.Value.StartsWith(Tokenizer.CODEBLOCK))
-                    {
-                        lexer.NextToken();
-                        token = nextToEscape;
-                    }
+                    this.ConsumeToken(); // Ignore Escape
+                    token = this.ConsumeToken(); // Consume CodeBlock
                 }
-                else if (token.Type == TokenType.Indentation)
-                {
-                    lexer.NextToken();
-                    code.AddChild(new TextNode(token.Value));
-                    continue;
-                }
-                else if (token.Type == TokenType.Preformatted)
-                {
-                    lexer.NextToken();
-                    continue;
-                }
-                // Find a parser method for the token type and get the generated HtmlElement
-                //code.AddChild(ParseText(ctx));
-                ProcessChildElement(code, GetInlineNodeParser(ctx, token), ctx);
+
+                // If the markup is not enabled or there's no inline element parser for the token type, use ParseText.
+                this.GetInlineParser(ctx, token, false)(ctx);
             }
-            ctx.MarkupProcessingEnabled(tmp);
-            pre.AddChild(code);
-            return pre;
+
+            // Create a CodeNode that will be rendered as a block
+            CodeNode codeNode = new CodeNode(true);
+
+            // Set the class if lang is available
+            if (lang != null)
+                codeNode.Attributes["class"] = lang;
+
+            while (this.Output.Any())
+            {
+                // If the last node is equals to our saved lastNode, it means we reached
+                // the starting point so we need to stop consuming Output's elements
+                if (this.Output.Last == lastNode)
+                    break;
+
+                // Add a child to the current code node
+                codeNode.InsertChild(0, this.PopElement());
+            }
+
+            // Wrap the CodeNode with a PreformattedNode
+            PreformattedNode pre = new PreformattedNode();
+            pre.AddChild(codeNode);
+
+            // Add the node to the Output
+            this.Output.AddLast(pre);
+
+            // Restore the previous state
+            ctx.SwitchMarkupProcessingTo(oldMarkupProcessingState);
         }
 
-        private DmlElement ParseDmlSource(ParsingContext ctx)
+        private void ParseDmlSource(ParsingContext ctx)
         {
-            lexer.NextToken(); // Consume CodeBlock
-            lexer.NextToken(); // Consume CodeBlockLang
-            lexer.NextToken(); // Consume NewLine
+            this.ConsumeToken(); // Consume CodeBlock
+            this.ConsumeToken(); // Consume CodeBlockLang
+            this.ConsumeToken(); // Consume NewLine
+
+            // This will contain all the tokens withing the code block
             List<Token> source = new List<Token>();
-            Token token;
-            while ((token = lexer.PeekToken()) != null)
+
+            while (this.HasTokens)
             {
-                lexer.NextToken();
+                var token = this.ConsumeToken();
+
+                // Break if we found the closing token
                 if (token.Type == TokenType.CodeBlock)
-                {
                     break;
-                }
-                else if (token.Type == TokenType.Escape)
-                {
-                    Token nextToEscape = lexer.PeekToken();
-                    if (nextToEscape != null && (nextToEscape.Value.StartsWith(Tokenizer.CODEBLOCK) || nextToEscape.Value.StartsWith("!"+Tokenizer.CODEBLOCK)))
-                    {
-                        lexer.NextToken();
-                        token = nextToEscape;
-                    }
-                }
+
+                // If the escaped token is a CodeBlock, ignore the Escape and take the CodeBlock
+                if (token.Type == TokenType.Escape && this.PeekToken()?.Type == TokenType.CodeBlock)
+                    token = this.ConsumeToken();
+
                 source.Add(token);
             }
 
-            GroupNode outgroup = new GroupNode();
             // Source
             CodeNode code = new CodeNode(true);
-            int bqlevel = 0;
-            bool lastNl = false;
-            foreach (Token src in source)
-            {
-                if (src.Type == TokenType.HeaderStart)
-                {
-                    if (lastNl)
-                    {
-                        code.AddChild(new TextNode(" ".PadLeft(bqlevel+1, '>')));
-                        lastNl = false;
-                    }
-                    code.AddChild(new TextNode(""));
-                }
-                else if (src.Type == TokenType.Blockquote)
-                {
-                    lastNl = false;
-                    bqlevel++;
-                    code.AddChild(new TextNode(src.OriginalValue ?? src.Value));
-                }
-                else if (src.Type == TokenType.BlockquoteEndMarker)
-                {
-                    bqlevel--;
-                    
-                }
-                else if (src.Type == TokenType.NewLine && bqlevel > 0)
-                {
-                    lastNl = true;
-                    code.AddChild(new TextNode((src.OriginalValue ?? src.Value)));
-                }
-                else
-                {
-                    if (lastNl)
-                    {
-                        code.AddChild(new TextNode(" ".PadLeft(bqlevel+1, '>')));
-                        lastNl = false;
-                    }
-                    code.AddChild(new TextNode((src.OriginalValue ?? src.Value).Replace("<", "&lt;")));
-                }
-            }
-            outgroup.AddChild(code);
 
-            // Output
+            // Process the source as plain text
+            source.ForEach(src => code.AddChild(new TextNode((src.OriginalValue ?? src.Value).Replace("<", "&lt;"))));
+
+            // Add the CodeBlock with the source
+            this.Output.AddLast(code);
+
+            // Process previous source to get the rendered version
             Parser parser = new Parser();
             DmlDocument doc = parser.Parse(source);
-            outgroup.MergeChildren(doc.Body);
+
+            // Get body's children of the parsed document
+            doc.Body.Children.ForEach(c => this.Output.AddLast(c));
+
+            // Add a <hr/> after the DmlSource
             ThematicBreakNode hr = new ThematicBreakNode();
             hr.Attributes["class"] = "short";
-            outgroup.AddChild(hr);
 
-            return outgroup;
+            this.Output.AddLast(hr);
         }
 
-        private DmlElement ParseText(ParsingContext ctx)
+        private void ParsePreformatted(ParsingContext ctx)
         {
-            bool lastIsEscapeSeq = lexer.Output.Count > 0 && lexer.Output.Last().Type == TokenType.Escape;
-            Token t = lexer.NextToken();
-            string val = t.Value;
-            if (!ctx.IsMarkupProcessingEnabled() || (lastIsEscapeSeq && t.Type == TokenType.Lt))
+            // Get a reference to the last node in the linked list
+            // before doing anything related to this preformatted block
+            var lastNode = this.Output.Last;
+
+            // Consume the Preformatted token
+            this.ConsumeToken();
+
+            // Disable markup processing. Save the current markup processing state
+            bool oldMarkupProcessingState = ctx.SwitchMarkupProcessingTo(false);
+
+            while (this.HasTokens)
             {
-                val = (val ?? "").Replace("<", "&lt;");
-            }
-            return new TextNode(val);
-        }
+                var token = this.PeekToken();
 
-        private DmlElement ParseBold(ParsingContext ctx)
-        {
-            var result = ParseInline(new StrongNode(), TokenType.BoldClose, ctx);
-            return result;
-        }
+                // Break on 2NL
+                if (token.Type == TokenType.DoubleNewLine)
+                    break;
 
-        private DmlElement ParseItalic(ParsingContext ctx)
-        {
-            var result = ParseInline(new ItalicNode(), TokenType.Italic, ctx);
-            return result;
-        }
-
-        private DmlElement ParseInlineCode(ParsingContext ctx)
-        {
-            bool markupProcessingMode = ctx.IsMarkupProcessingEnabled();
-            ctx.MarkupProcessingEnabled(false);
-            var result = ParseInline(new CodeNode(false), TokenType.InlineCode, ctx);
-            ctx.MarkupProcessingEnabled(markupProcessingMode);
-            return result;
-        }
-
-        private DmlElement ParseUnderlined(ParsingContext ctx)
-        {
-            var node = new UnderlineNode();
-            var result = ParseInline(node, TokenType.Underlined, ctx);
-            return result;
-        }
-
-        private DmlElement ParseStrikethrough(ParsingContext ctx)
-        {
-            var node = new StrikeNode();
-            var result = ParseInline(node, TokenType.Strikethrough, ctx);
-            return result;
-        }
-
-        private DmlElement ParseInline(DmlElement el, TokenType closeToken, ParsingContext ctx)
-        {
-            // Consume the starting token to remove the token that triggered this parser
-            // (it could be '[', '/', '`', '~', etc)
-            Token startToken = lexer.NextToken();
-
-            GroupNode nodes = new GroupNode();
-            Token token;
-            while ((token = lexer.PeekToken()) != null)
-            {
-                if (token.Type == TokenType.Escape && !ctx.IsMarkupProcessingEnabled())
+                // Consume the indentation after a new line
+                if (token.Type == TokenType.NewLine && this.PeekToken(1)?.Type == TokenType.Indentation)
                 {
-                    Token firstnl = lexer.NextToken();
-                    token = lexer.PeekToken();
-                    if (token != null && (token.Type == closeToken || token.Type == TokenType.Escape))
+                    this.ConsumeToken();
+                    this.ConsumeToken();
+                    this.Output.AddLast(new TextNode("\n"));
+                    continue;
+                }
+
+                // It is always ParseText
+                this.ParseText(ctx);
+            }
+
+            // Restore markup processing
+            ctx.SwitchMarkupProcessingTo(oldMarkupProcessingState);
+            
+            CodeNode code = new CodeNode(true);
+
+            // Populate the CodeNode
+            while (this.Output.Any() & this.Output.Last != lastNode)
+                code.InsertChild(0, this.PopElement());
+
+            // Wrap the code node into the pref node
+            PreformattedNode pre = new PreformattedNode();
+
+            pre.AddChild(code);
+
+            // Add the pre node into the output
+            this.Output.AddLast(pre);
+        }
+
+        private ListType GetListType(Token listToken)
+        {
+            return listToken.Value == "# " ? ListType.Ordered
+                : listToken.Value.StartsWith("[") ? ListType.Todo
+                : ListType.Unordered;
+        }
+
+        private int? GetOrderedListStartIndex(Token tkn)
+        {
+            if (tkn.OriginalValue == null || tkn.OriginalValue.Length <= 2)
+                return null;
+
+            var value = tkn.OriginalValue.Substring(0, tkn.OriginalValue.Length - 2);
+
+            if (int.TryParse(value, out int index))
+                return index;
+
+            return null;
+        }
+
+        private bool IsSameListType(Token a, Token b) => a.Type == b.Type && a.Value[0] == b.Value[0] && (a.OriginalValue == b.OriginalValue || a.OriginalValue != null);
+
+        private void ParseListItem(ParsingContext ctx)
+        {
+            // Get a reference to the last node in the linked list
+            // before doing anything related to this list
+            var lastNode = this.Output.Last;
+
+            // Each list item is responsible of removeing the indentation
+            while (this.PeekToken()?.Type == TokenType.Indentation)
+                this.ConsumeToken();
+
+            // Retrieve the token that contains the list type info
+            var listToken = this.ConsumeToken();
+
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // Break on ListItem or Indentation to let ParseList parse the new items
+                // Break on DoubleNewLine to let some caller in the chain to handle it
+                if (token.Type == TokenType.ListItem || token.Type == TokenType.DoubleNewLine || token.Type == TokenType.Indentation)
+                    break;
+
+                // Just one new line means the content is still part of the current item, consume it and continue
+                if (token.Type == TokenType.NewLine)
+                {
+                    this.ConsumeToken();
+                    continue;
+                }
+
+                // Parse the inline element
+                this.GetInlineParser(ctx, token)(ctx);
+            }
+
+            // Todo items use a different implementation
+            var listItem = this.GetListType(listToken) != ListType.Todo ? new ListItemNode()
+                            : (DmlElement)new TodoListItemNode(listToken.Value.ToLower().StartsWith("[x"));
+
+            // Todos already have children, we need to get the base index to insert new nodes
+            var baseIndex = listItem.Children.Count;
+
+            // Populate the ListItem
+            while (this.Output.Any() & this.Output.Last != lastNode)
+                listItem.InsertChild(baseIndex, this.PopElement());
+
+            // Add the ListItem to the Output
+            this.Output.AddLast(listItem);
+        }
+
+        private void ParseList(ParsingContext ctx)
+        {
+            // Get a reference to the last node in the linked list
+            // before doing anything related to this list
+            var lastNode = this.Output.Last;
+
+            // Track the indents for nested lists
+            // indents contains the current list's indentation
+            int indents = 0;
+            
+            while (this.PeekToken(indents)?.Type == TokenType.Indentation)
+                indents++;
+
+            // This tokens contains the type of list (we step over 'indents' tokens)
+            var listTypeToken = this.PeekToken(indents);
+
+            // Compute the ListType
+            ListType listType = this.GetListType(listTypeToken);
+
+            // Compute the start index if the list is an Ordered list
+            int? listStartIndex = listType == ListType.Ordered ? this.GetOrderedListStartIndex(listTypeToken) : (int?)null;
+
+            // Use a flag to know if this current list is an enumerated list
+            bool isEnumeratedList = listStartIndex.HasValue;
+
+            // Keep track of the last index (enumerated lists)
+            int? lastIndex = null;
+
+            while (this.HasTokens)
+            {
+                // Check the current indentation level
+                int currentIndents = 0;
+                while (this.PeekToken(currentIndents)?.Type == TokenType.Indentation)
+                    currentIndents++;
+
+                var token = this.PeekToken(currentIndents);
+
+                // This tokens must be a list item
+                if (token.Type != TokenType.ListItem)
+                    break;
+
+                // If currentIndents is lesser than the original indents, we need to go
+                // back and close this list
+                if (currentIndents < indents)
+                    break;
+
+                // Get the current token's list type
+                ListType currentType = this.GetListType(token);
+
+                // If the list type changes, and we are on the same indentation level, we need to
+                // close this list to start a new one that will be sibling of this one
+                if (!this.IsSameListType(listTypeToken, token) && currentIndents == indents)
+                    break;
+
+                // Ordered lists might break if they are "numerated"
+                if (isEnumeratedList && currentIndents == indents)
+                {
+                    // Check if lastIndex is poupulted, first time it is null
+                    // Check if currentType is ordered too
+                    if (lastIndex.HasValue && currentType == ListType.Ordered)
                     {
-                        lexer.NextToken();
-                        nodes.AddChild(new TextNode(token.Value));
-                        continue;
+                        // Compute the currentIndex
+                        var currentIndex = this.GetOrderedListStartIndex(token);
+
+                        // If the currentIndex exists is not lastIndex + 1, break this list
+                        if (!currentIndex.HasValue || currentIndex <= lastIndex || currentIndex > lastIndex + 1)
+                            break;
                     }
+
+                    // Update last index
+                    lastIndex = this.GetOrderedListStartIndex(token);
+                }
+
+                // If the indent level is the same, just add a new <li> to the list
+                if (currentIndents == indents)
+                {
+                    this.ParseListItem(ctx);
+                    continue;
+                }
+
+                // If not, it means the currentIndents is greater than the original indents.
+                // In that case we need to parse a new list that will be child of the last
+                // saved <li> element
+                this.ParseList(ctx);
+
+                // Retrieve the parsed list
+                var innerList = this.PopElement();
+
+                // Append the inner list to the last <li>
+                this.Output.Last().AddChild(innerList);
+            }
+
+            // Create the ListNode and populate with the ListItemNodes
+            ListNode list = new ListNode(listType);
+
+            // If the list is enumerated, set the start index
+            if (listStartIndex.HasValue)
+            {
+                list.Attributes["start"] = listStartIndex.Value.ToString();
+                list.Properties["index"] = listStartIndex.Value;
+            }
+
+            list.Properties["indents"] = indents;
+
+            // Process list's children
+            while (this.Output.Any() & this.Output.Last != lastNode)
+                list.InsertChild(0, this.PopElement());
+
+            // Add the list to the output
+            this.Output.AddLast(list);
+        }
+
+        private void ParseEscapeBlock(ParsingContext ctx)
+        {
+            // Consume the starting token ``
+            this.ConsumeToken();
+
+            // // Disable the markup processing. Save the markup processing state
+            bool oldMarkupProcessingState = ctx.SwitchMarkupProcessingTo(false);            
+            
+
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // Break when we found the closing token ``
+                if (token.Type == TokenType.EscapeBlock)
+                {
+                    this.ConsumeToken();
+                    break;
+                }
+
+                // Always process the content as plain text
+                this.ParseText(ctx);
+            }
+
+            // Restore the markup processing state
+            ctx.SwitchMarkupProcessingTo(oldMarkupProcessingState);
+        }
+
+        #endregion
+
+        #region Inline parsers
+
+        private void ParseNewLine(ParsingContext ctx) => this.Output.AddLast(new TextNode(this.ConsumeToken().Value));
+
+        private void ParseBold(ParsingContext ctx) => this.ParseInline(ctx, new StrongNode(), TokenType.BoldClose);
+
+        private void ParseItalic(ParsingContext ctx) => this.ParseInline(ctx, new ItalicNode(), TokenType.Italic);
+
+        private void ParseUnderline(ParsingContext ctx) => this.ParseInline(ctx, new UnderlineNode(), TokenType.Underlined);
+
+        private void ParseStrikethrough(ParsingContext ctx) => this.ParseInline(ctx, new StrikeNode(), TokenType.Strikethrough);
+
+        private void ParseInlineCode(ParsingContext ctx)
+        {
+            bool oldMarkupProcessingMode = ctx.SwitchMarkupProcessingTo(false);
+
+            this.ParseInline(ctx, new CodeNode(false), TokenType.InlineCode);
+
+            ctx.SwitchMarkupProcessingTo(oldMarkupProcessingMode);
+        }
+
+        // This method is used for almost all the inline elements as all of them have a similar parsing process
+        private void ParseInline(ParsingContext ctx, DmlElement element, TokenType close)
+        {
+            // Get a reference to the last node in the linked list
+            // before doing anything related to this inline element
+            var lastNode = this.Output.Last;
+
+            // Keep the start token, we could need it 
+            var startToken = this.ConsumeToken();
+
+            while (true)
+            {
+                // If we run out of tokens, we need to place the starting token after lastNode (starting point).
+                // If lastNode is null, it means we don't have elements in the Output, so place the start token
+                if (!this.HasTokens)
+                {
+                    if (lastNode != null)
+                        this.Output.AddAfter(lastNode, new TextNode(startToken.Value));
                     else
-                    {
-                        lexer.RestoreToken(firstnl);
-                    }
-                }
-                else if (token.Type == closeToken)
-                {
-                    // If next token is the closing token, consume it and return the
-                    // provided HtmlElement with the parsed children
-                    lexer.NextToken();
-                    el.MergeChildren(nodes);
-                    return el;
-                }
-                else if (token.Type == TokenType.NewLine)
-                {
-                    // If next token is a NewLine token, check for another NewLine after it
-                    Token firstnl = lexer.NextToken();
-                    token = lexer.PeekToken();
-                    // If the second token is null, set the consumed NewLine to `token` againt to process
-                    // it and in the next iteration, break the execution of this method.
-                    if (token == null || token.Type != TokenType.NewLine)
-                    {
-                        token = firstnl;
-                        lexer.RestoreToken(token);
-                    }
-                    else if (token.Type == TokenType.NewLine)
-                    {
-                        // If next token is another NewLine, restore the previous consumed NewLine,                        
-                        // break and let the caller to resolve this
-                        lexer.RestoreToken(firstnl);
-                        break;
-                    }
+                        this.Output.AddLast(new TextNode(startToken.Value));
+                    return;
                 }
 
-                ProcessChildElement(nodes, GetInlineNodeParser(ctx, token), ctx);
+                // Keep parsing more inline elements
+                Token token = this.PeekToken();
+
+                // The 2-NL rule is handled at block elements, so if we find two new lines
+                // we need to return to the caller, but because the 2-NL will end the current
+                // element, it means it is not a valid "inline" element, just plain text.
+                // We insert a new TextNode with the starting token's value after our
+                // lastNode
+                if (token.Type == TokenType.DoubleNewLine)
+                {
+                    this.Output.AddAfter(lastNode, new TextNode(startToken.Value));
+                    return;
+                }
+
+                // If next token is the one that closes this element, consume the token
+                // and break the loop
+                if (token.Type == close)
+                {
+                    this.ConsumeToken();
+                    break;
+                }
+
+                this.GetInlineParser(ctx, token)(ctx);
             }
-            // If we reached this path, there are no more tokens or this is not 
-            // a balanced token, resulting in a group of tokens that caller should
-            // merge with its children.
-            GroupNode group = new GroupNode();
-            group.AddChild(new TextNode(startToken.Value));
-            group.MergeChildren(nodes);
-            return group;
+
+            // If the last node is equals to our saved lastNode, it means we reached
+            // the starting point so we need to stop consuming Output's elements
+            while (this.Output.Any() && this.Output.Last != lastNode)
+            {
+                // Add a child to the current paragrapg
+                element.InsertChild(0, this.PopElement());
+            }
+
+            // Add the parsed element
+            this.Output.AddLast(element);
         }
 
-        private DmlElement ParseLink(ParsingContext ctx)
+        private void ParseLink(ParsingContext ctx)
         {
-            lexer.NextToken(); // Consume [[
-            GroupNode text = new GroupNode();
+            // Get a reference to the first token before any link's token
+            var lastNode = this.Output.Last;
+
+            // Consume the start token, we might need it if this is not
+            // a valid link
+            var startToken = this.ConsumeToken();
+
+            // We need to parse the link's content, but if it is empty
+            // we won't create a LinkNode
+            bool isValidLink = false;
+
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // Pipe divide link's sections
+                if (token.Type == TokenType.Pipe)
+                {
+                    this.ConsumeToken();
+                    break;
+                }
+
+                // If we find the LinkEnd, we need to break
+                if (token.Type == TokenType.LinkEnd || token.Type == TokenType.DoubleNewLine)
+                    break;
+
+                this.GetInlineParser(ctx, token)(ctx);
+
+                // Check if the link's content is not empty
+                isValidLink |= token.Type != TokenType.Text || !string.IsNullOrWhiteSpace(token.Value);
+            }
+
+            // We have content, we have a link. Now we need to parse (if available)
+            // the href and title attributes
             string href = "";
             string title = "";
 
-            Token t = null;
-            // Text
-            while ((t = lexer.PeekToken()) != null)
-            {
-                if (t.Type == TokenType.Pipe || t.Type == TokenType.LinkEnd)
-                {
-                    if (t.Type == TokenType.Pipe)
-                        lexer.NextToken();
-                    break;
-                }
-                ProcessChildElement(text, GetInlineNodeParser(ctx, t), ctx);
-            }
-
             // Href
-            while ((t = lexer.PeekToken()) != null)
+            while (this.HasTokens)
             {
-                if (t.Type == TokenType.Pipe || t.Type == TokenType.LinkEnd)
+                var token = this.PeekToken();
+
+                if (token.Type == TokenType.Pipe)
                 {
-                    if (t.Type == TokenType.Pipe)
-                        lexer.NextToken();
+                    this.ConsumeToken();
                     break;
                 }
-                lexer.NextToken();
-                href += t.Value;
+
+                if (token.Type == TokenType.LinkEnd || token.Type == TokenType.DoubleNewLine)
+                    break;
+
+                href += this.ConsumeToken().Value;
             }
 
             // Title
-            while ((t = lexer.PeekToken()) != null)
+            while (this.HasTokens)
             {
-                if (t.Type == TokenType.LinkEnd)
-                {
+                var token = this.PeekToken();
+
+                if (token.Type == TokenType.LinkEnd || token.Type == TokenType.DoubleNewLine)
                     break;
-                }
-                lexer.NextToken();
-                title += t.Value;
+
+                title += this.ConsumeToken().Value;
             }
 
-            lexer.NextToken(); // Consume ]]
 
-            title.Trim();
+            // If next token is not a LinkEnd, it is not a valid link
+            isValidLink &= this.PeekToken()?.Type == TokenType.LinkEnd;
+
+
+            // If the final token is not a LinkEnd, it is not
+            // a link, we need to return the parsed content
+            if (!isValidLink)
+            {
+                // Add the starting token as plain text
+                this.AddAfterElement(lastNode, new TextNode(startToken.Value));
+
+                // We need to parse the href and title attributes, because
+                // we consumed them as plain text before
+                Parser parser = new Parser();
+
+                // Parse the href
+                var hrefdoc = parser.Parse(href);
+                
+                if (hrefdoc.Body.Children.Any())
+                {
+                    this.Output.AddLast(new TextNode("|"));
+                    hrefdoc.Body.Children[0].Children.ForEach(c => this.Output.AddLast(c));
+                }
+
+                // Parse the title
+                var titledoc = parser.Parse(title);
+
+                if (titledoc.Body.Children.Any())
+                {
+                    this.Output.AddLast(new TextNode("|"));
+                    titledoc.Body.Children[0].Children.ForEach(c => this.Output.AddLast(c));
+                }                    
+
+                return;
+            }
+
+            // Consume the LinkEnd token
+            this.ConsumeToken();
+
+            // Check if the link is a link to a reference
             href = href.Trim();
             if (href.StartsWith(":"))
             {
                 List<string> titles = title.Split(',').ToList();
                 List<string> hrefs = href.Substring(1).Split(',').ToList();
+
                 CustomNode links = new CustomNode("span");
-                links.MergeChildren(text);
-                for (int i=0; i < hrefs.Count; i++) {
+
+                while (this.Output.Any() & this.Output.Last != lastNode)
+                    links.InsertChild(0, this.PopElement());
+
+                for (int i = 0; i < hrefs.Count; i++)
+                {
                     ReferenceLinkNode refLink = new ReferenceLinkNode(hrefs.ElementAt(i), titles.ElementAtOrDefault(i));
                     links.AddChild(refLink);
                 };
-                return links;
+
+                this.Output.AddLast(links);
+
+                return;
             }
 
+            // If it is not a link to a reference, it is a simple
+            // anchor
             LinkNode a = new LinkNode(href, title);
-            a.MergeChildren(text);
-            return a;
+
+            while (this.Output.Any() & this.Output.Last != lastNode)
+                a.InsertChild(0, this.PopElement());
+
+            this.Output.AddLast(a);
         }
 
-        private DmlElement ParseImage(ParsingContext ctx)
+        private void ParseImage(ParsingContext ctx)
         {
-            lexer.NextToken(); // Consume [{
-            string title = "";
-            string source = "";
-            string altTitle = "";
+            // Get a reference to the first token before any img's token
+            var lastNode = this.Output.Last;
 
-            Token t = null;
-            // title
-            while ((t = lexer.PeekToken()) != null)
-            {
-                if (t.Type == TokenType.Pipe || t.Type == TokenType.ImageEnd)
-                {
-                    if (t.Type == TokenType.Pipe)
-                        lexer.NextToken();
-                    break;
-                }
-                lexer.NextToken();
-                title += t.Value;
-            }
+            // Consume the start token, we might need it if this is not
+            // a valid image
+            var startToken = this.ConsumeToken();
+
+            var isValidImage = true;
 
             // src
-            while ((t = lexer.PeekToken()) != null)
+            string source = "";
+
+            while (this.HasTokens)
             {
-                if (t.Type == TokenType.Pipe || t.Type == TokenType.ImageEnd)
+                var token = this.PeekToken();
+
+                // Pipe close the title section, consume it and break
+                if (token.Type == TokenType.Pipe)
                 {
-                    if (t.Type == TokenType.Pipe)
-                        lexer.NextToken();
+                    this.ConsumeToken();
                     break;
                 }
-                lexer.NextToken();
-                source += t.Value;
+
+                // Image end or 2NL break, because of end of image or invalid image
+                if (token.Type == TokenType.ImageEnd || token.Type == TokenType.DoubleNewLine)
+                    break;
+
+                source += this.ConsumeToken().Value;
+            }
+
+            // If src is empty, it is not a valid img tag
+            if (string.IsNullOrWhiteSpace(source))
+                isValidImage = false;
+
+            // title
+            string title = "";
+
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // Pipe close the title section, consume it and break
+                if (token.Type == TokenType.Pipe)
+                {
+                    this.ConsumeToken();
+                    break;
+                }
+
+                // Image end or 2NL break, because of end of image or invalid image
+                if (token.Type == TokenType.ImageEnd || token.Type == TokenType.DoubleNewLine)
+                    break;
+
+                title += this.ConsumeToken().Value;
             }
 
             // alt
-            while ((t = lexer.PeekToken()) != null)
+            string altTitle = "";
+            
+            while (this.HasTokens)
             {
-                if (t.Type == TokenType.ImageEnd)
-                {
+                var token = this.PeekToken();
+
+                // Image end or 2NL break, because of end of image or invalid image
+                if (token.Type == TokenType.ImageEnd || token.Type == TokenType.DoubleNewLine)
                     break;
-                }
-                lexer.NextToken();
-                altTitle += t.Value;
+
+                altTitle += this.ConsumeToken().Value;
             }
 
-            lexer.NextToken(); // Consume }]
+
+            // If next token is not the ImageEnd, it is an invalid img tag
+            isValidImage &= this.PeekToken()?.Type == TokenType.ImageEnd;
+
+
+            // If the final token is not a ImageEnd, it is not
+            // an image, we need to return the parsed content
+            if (!isValidImage)
+            {
+                // Add the starting token as plain text
+                this.AddAfterElement(lastNode, new TextNode(startToken.Value));
+
+                // We need to parse the srouce, title, and alt title attributes, because
+                // we consumed them as plain text before
+                Parser parser = new Parser();
+
+                // Parse the source
+                var srcdoc = parser.Parse(source);
+
+                if (srcdoc.Body.Children.Any())
+                    srcdoc.Body.Children[0].Children.ForEach(c => this.Output.AddLast(c));
+
+                // Parse the title
+                var titledoc = parser.Parse(title);
+
+                if (titledoc.Body.Children.Any())
+                {
+                    this.Output.AddLast(new TextNode("|"));
+                    titledoc.Body.Children[0].Children.ForEach(c => this.Output.AddLast(c));
+                }
+
+                // Parse the alt title
+                var alttitledoc = parser.Parse(altTitle);
+
+                if (alttitledoc.Body.Children.Any())
+                {
+                    this.Output.AddLast(new TextNode("|"));
+                    alttitledoc.Body.Children[0].Children.ForEach(c => this.Output.AddLast(c));
+                }
+
+                return;
+            }
+
+            // Consume }]
+            this.ConsumeToken();
 
             ImageNode img = new ImageNode(title, source, altTitle);
-            return img;
+
+            // Add the imate to the output
+            this.Output.AddLast(img);
         }
 
-        private DmlElement ParseReference(ParsingContext ctx)
+        private void ParseReference(ParsingContext ctx)
         {
-            Token start = lexer.NextToken();
-            Token token = null;
-            List<Token> hrefTokens = new List<Token>();
-            while ((token = lexer.PeekToken()) != null && token.Type != TokenType.ReferenceEnd && token.Type != TokenType.NewLine)
-            {
-                hrefTokens.Add(lexer.NextToken());
-            }
-            if (token == null || token.Type == TokenType.NewLine)
-            {
-                hrefTokens.Reverse();
-                hrefTokens.ForEach(t => lexer.RestoreToken(t));
-                TextNode text = new TextNode(start.Value);
-                return text;
-            }
-            lexer.NextToken(); // Consume ReferenceEnd
+            // Save the last inserted node before any
+            // Reference processing
+            var lastNode = this.Output.Last;
 
-            List<Token> titleTokens = new List<Token>();
-            while ((token = lexer.PeekToken()) != null && token.Type != TokenType.Pipe && token.Type != TokenType.NewLine)
-            {
-                titleTokens.Add(lexer.NextToken());
-            }
-            if (token == null || token.Type == TokenType.NewLine)
-            {
-                hrefTokens.Reverse();
-                hrefTokens.ForEach(t => lexer.RestoreToken(t));
-                titleTokens.Reverse();
-                titleTokens.ForEach(t => lexer.RestoreToken(t));
-                TextNode text = new TextNode(start.Value);
-                return text;
-            }
-            titleTokens.Add(lexer.NextToken()); // Consume Pipe
+            // Consume and save the startToken, we might need it later
+            var startToken = this.ConsumeToken();
 
-            string id = string.Join("", hrefTokens.Select(s => s.Value).ToList()).Trim();
-            ReferenceNode reference = new ReferenceNode(id);
+            // We might need th colon token
+            Token colonToken = null;
+
+            bool validReference = true;
+
+            // Parse the content between | and : (href)
+            string href = "";
+
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // If it is a DoubleNewLine, it is an invalid reference
+                if (token.Type == TokenType.DoubleNewLine)
+                {
+                    validReference = false;
+                    break;
+                }
+
+                // Break at colon
+                if (token.Type == TokenType.Colon)                    
+                    break;
+
+                // Concatenate all tokens as plain text (it is a HTML attribute's value)
+                href += this.ConsumeToken().Value;
+            }
+
+            if (this.PeekToken()?.Type != TokenType.Colon)
+                validReference = false;
+            else
+                colonToken = this.ConsumeToken();
+
+            // If there is no more input, it is not a valid reference
+            validReference &= this.HasTokens;
             
-            titleTokens.Reverse();
-            titleTokens.ForEach(t => lexer.RestoreToken(t));
-            while ((token = lexer.PeekToken()) != null && token.Type != TokenType.Pipe && token.Type != TokenType.NewLine)
+            // We need to parse the Reference's title
+            while (validReference && this.HasTokens)
             {
-                ProcessChildElement(reference, GetInlineNodeParser(ctx, token), ctx);
-            }
-            lexer.NextToken(); // Consume Pipe
-            return reference;
-        }
+                var token = this.PeekToken();
 
-        private DmlElement ParseEscapeBlock(ParsingContext ctx)
-        {
-            lexer.NextToken();
-            Token token = null;
-            GroupNode group = new GroupNode();
-            bool tmp = ctx.IsMarkupProcessingEnabled();
-            ctx.MarkupProcessingEnabled(false);
-            while ((token = lexer.PeekToken()) != null && token.Type != TokenType.EscapeBlock)
+                // Break on 2NL rule and mark the parsing as invalid
+                if (token.Type == TokenType.DoubleNewLine)
+                {
+                    validReference = false;
+                    break;
+                }
+
+                // Break on reference end
+                if (token.Type == TokenType.Pipe)                    
+                    break;
+
+                this.GetInlineParser(ctx, token)(ctx);
+            }
+
+            // If the next token is not a ReferenceEnd, it is not a valid reference
+            if (this.PeekToken()?.Type != TokenType.Pipe)
+                validReference = false;
+
+            // We need to rollback the parsing
+            if (!validReference)
             {
-                ProcessChildElement(group, GetInlineNodeParser(ctx, token), ctx);
-            }
-            lexer.NextToken();
-            ctx.MarkupProcessingEnabled(tmp);
-            return group;
-        }
+                // Insert the pipe as plain text
+                var startTokenElement = this.AddAfterElement(lastNode, new TextNode(startToken.Value));
 
-        private void ProcessChildElement(DmlElement node, ElementParser nodeParser, ParsingContext ctx)
-        {
-            DmlElement child = nodeParser.Invoke(ctx);
-            if (child == null)
+                // Parse the href, it might contain markup elements
+                Parser parser = new Parser();
+                var hrefdoc = parser.Parse(href);
+
+                if (hrefdoc.Body.Children.Any())
+                {
+                    hrefdoc.Body.Children[0].Children.ForEach(c => this.Output.AddAfter(startTokenElement, c));
+
+                    // Find the new "last" node
+                    startTokenElement = this.Output.FindLast(hrefdoc.Body.Children[0].Children.Last());
+                }
+
+                // If colonToken has been found, we need to insert it in the right position
+                if (colonToken != null)
+                    this.Output.AddAfter(startTokenElement, new TextNode(colonToken.Value));
+
                 return;
-            if (child is GroupNode)
+            }
+
+            // Consume the ReferenceEnd
+            this.ConsumeToken();
+
+            // Create the new ReferenceNode
+            ReferenceNode reference = new ReferenceNode(href.Trim());
+
+            while (this.Output.Any() & this.Output.Last != lastNode)
+                reference.InsertChild(0, this.PopElement());
+
+            this.Output.AddLast(reference);
+        }
+
+        private void ParseEscape(ParsingContext ctx)
+        {
+            this.ConsumeToken();
+
+            // If the escaped token is not an especial token
+            // we just add a backslash
+            if (this.PeekToken()?.Type == TokenType.Text)
             {
-                node.MergeChildren(child);
+                this.Output.AddLast(new TextNode("\\"));
+            }
+            else if (this.PeekToken()?.Type == TokenType.Lt)
+            {
+                this.ConsumeToken();
+                this.Output.AddLast(new TextNode("&lt;"));
             }
             else
             {
-                node.AddChild(child);
+                // If the token's type is different from Text, we process
+                // the token's value as plain text
+                this.ParseText(ctx);
             }
         }
 
-        public List<Token> TokenizeDocument(string doc)
+        private void ParseText(ParsingContext ctx)
         {
-            Lexer lexer = new Lexer(doc);
-            List<Token> tokens = new List<Token>();
-            Token tmp;
-            while ((tmp = lexer.NextToken()) != null)
-            {
-                tokens.Add(tmp);
-            }
-            return tokens;
+            Token token = this.ConsumeToken();
+
+            string value = token.Value;
+
+            // Sanitize the '<'
+            if (!ctx.MarkupProcessingEnabled)
+                value = (value ?? "").Replace("<", "&lt;");
+
+            this.Output.AddLast(new TextNode(value));
         }
+
+        #endregion
     }
 }
