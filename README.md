@@ -2,38 +2,47 @@
 
 ## What is it?
 
-**DML** is a general purpose markup language that can generate `HTML` and `Markdown`. Its key aspect is to be easy to write, easy to read and understandable in its raw form. Though simple, its design makes it flexible and powerful to easily generate new target outputs.
+**DML** is a lightweight markup language that generates `HTML` and `Markdown`. Its key aspect is to 
+be easy to write, easy to read and understandable in its raw form. Though simple, its design makes it flexible 
+and powerful to easily generate new target outputs.
+## Does this thing work?
+
+The README you are reading has been generated using the [ src/readme.dml ](https://github.com/lbrugnara/dml/tree/master/docs/src/readme.dml "") file. Try it yourself running
+```bash
+DmlCli.exe md --input "<project path>\docs\src\readme.dml" --output "<project path>\README.md" --watch 100
+```
+
+The [ src/input.dml ](https://github.com/lbrugnara/dml/blob/master/docs/src/input.dml "") file is the DML quick reference cheat sheet, you can output it to HTML running:
+```bash
+DmlCli.exe html --input "<project path>\docs\src\input.dml" --output "<project path>\docs\output\input.html" --content "<project path>\docs\src\content" --styles "<project path>\docs\src\style.css"
+```
 
 ## Project structure
 
 ### DmlLib
 
-It is placed in the [ src/DmlLib ](src/DmlLib "") folder. It is the **DML** core library, it can be easily included in any project.
-
+It is placed in the [ src/DmlLib ](src/DmlLib "") folder. It is the **DML** core library, it can be easily included in
+any project.
 The most basic usage of the library could be:
-
 ```C#
 DmlDocument doc = new Parser().Parse(File.ReadAllText(someFilePath));
 ```
 
-
-`DmlDocument` has an `OuterXml` and `InnerXml` properties that can be used to retrieve the **HTML** source.<br/>It also contains a `Body` and `Head` elements, they can be used to attach styles and scripts.
-
-To generate `Markdown` the `DmlDocument` provides a method called `ToMarkdown` that receives a `MarkdownTranslationContext` used to pass options to the Markdown translator, the options are related to features to use (or not) while traslating from **DML** to **Markdown**.
-
+`DmlDocument` has an `OuterXml` and `InnerXml` properties that can be used to retrieve the **HTML** source.<br/>
+It also contains a `Body` and `Head` elements, they can be used to attach styles and scripts.
+To generate `Markdown` the `DmlDocument` provides a method called `ToMarkdown` that receives a 
+`MarkdownTranslationContext` used to pass options to the Markdown translator, the options are related to
+features to use (or not) while traslating from **DML** to **Markdown**.
 ###  DmlCli
 
 The `DmlCli` project is placed in the [ src/DmlCli ](src/DmlCli "") folder. It provides the command line interface to translate from **DML** to **HTML** or **Markdown**.
-
 ```bash
-Usage: dml [html|md] [args]
+Usage: DmlCli.exe [html|md] [args]
 ```
-
 
 #### HTML
 
 These are the arguments for the **HTML** output (append is WIP):
-
 ```
 -i|--input            Source file
 
@@ -60,9 +69,7 @@ These are the arguments for the **HTML** output (append is WIP):
 -h|--help             Show this message
 ```
 
-
 Arguments to use the **Markdown** output:
-
 ```
 -i|--input            Source file
 
@@ -75,16 +82,14 @@ Arguments to use the **Markdown** output:
 -h|--help             Show this message
 ```
 
-
 ## Examples
 
 ```bash
-dml html --input src/source.dml --output doc/index.html --styles src/linkthis.css,src/includethis.css:i --content src/source-content
+DmlCli.exe html --input src/source.dml --output doc/index.html --styles src/linkthis.css,src/includethis.css:i --content src/source-content
 ```
 
-
-Assuming inside `source-content` we got an `img` folder with some `.jpg` files, running the previous command **DML** will generate a `doc` folder with the following content:
-
+Assuming inside `source-content` we got an `img` folder with some `.jpg` files, running the previous command **DML** will 
+generate a `doc` folder with the following content:
 ```
 doc/
  |── js/
@@ -96,15 +101,15 @@ doc/
  └── index.html
 ```
 
-
 ## Todo
 
 Next are pending features in no particular order
-
-- [ ] Detect HTML chunks to handle them properly. Now **DML** is just sending to the output the HTML received "as-is", to use HTML tags you need to put them in the same line, because the lexer (thus the parser) doesn't recognize HTML tagas as token, so all the DML tags will take precedence over them
-- [ ] Tables
+- [ ] Detect HTML chunks to handle them properly. Now **DML** is just sending to the output the HTML received "as-is", to use HTML tags you need toput them in the same line, because the lexer (thus the parser) doesn't recognize HTML tagas as token, so all the DML tags will take precedence over them
+- [ ] Tables. Currently there are some tricks using code blocks to build tables without the need to "one-line" thems
 - [ ] Generate pretty HTML output
 - [x] Accept multiple input files to generate the output consuming them in the order specified in the arguments
-- [x] To create two paragraph we need the *two-nl* rule. But this rule is based on the *HTML Paragraph*, not the *grammar paragraph*. Is true that we need both,  so it would be great to check the end character when just on **NL** is used, and if that character is a dot (or eventually a defined set of punctuation marks),  we should add an *HTML Line Break* to respect the "grammar" paragraph that was intended to be used.
+- [x] To create two paragraph we need the _two-nl_ rule. But this rule is based on the _HTML Paragraph_, not the _grammar paragraph_. Is true that we need both, so it would be great to check the end character when just on **NL** is used, and if that character is a dot (or eventually a defined set of punctuation marks), we should add an _HTML Line Break_ to respect the "grammar" paragraph that was intended to be used.
 - [x] List items: Using **NL** doesn't add an space between words, so if the input is "- List\nitem" the output text will be "Listitem" instead of the expected "List item"
 - [ ] Markdown output: Add space between the first list item and the previous element
+- [ ] Sentences that start like a new list and are actually followed by titles markup are not correctly being handled
+- [ ] The _two-nl_ rule does not work correctly in blockquotes, they are being ignored when there are more than 1 occurrence

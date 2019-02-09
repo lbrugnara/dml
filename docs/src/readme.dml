@@ -4,9 +4,24 @@
 What is it?
 ~~~~~~~~~~~
 
-[DML] is a general purpose markup language that can generate `HTML` and `Markdown`. Its key aspect is to 
+[DML] is a lightweight markup language that generates `HTML` and `Markdown`. Its key aspect is to 
 be easy to write, easy to read and understandable in its raw form. Though simple, its design makes it flexible 
 and powerful to easily generate new target outputs.
+
+Does this thing work?
+~~~~~~~~~~~~~~~~~~~~~
+
+The README you are reading has been generated using the [[ src/readme.dml | https://github.com/lbrugnara/dml/tree/master/docs/src/readme.dml ]] file. Try it yourself running
+
+!```bash
+DmlCli.exe md --input "<project path>\docs\src\readme.dml" --output "<project path>\README.md" --watch 100
+```
+
+The [[ src/input.dml | https://github.com/lbrugnara/dml/blob/master/docs/src/input.dml ]] file is the DML quick reference cheat sheet, you can output it to HTML running:
+
+!```bash
+DmlCli.exe html --input "<project path>\docs\src\input.dml" --output "<project path>\docs\output\input.html" --content "<project path>\docs\src\content" --styles "<project path>\docs\src\style.css"
+```
 
 Project structure
 ~~~~~~~~~~~~~~~~~
@@ -36,7 +51,7 @@ features to use (or not) while traslating from [DML] to [Markdown].
 The `DmlCli` project is placed in the [[ src/DmlCli | src/DmlCli ]] folder. It provides the command line interface to translate from [DML] to [HTML] or [Markdown].
 
 ```bash
-Usage: dml [html|md] [args]
+Usage: DmlCli.exe [html|md] [args]
 ```
 
 HTML
@@ -88,7 +103,7 @@ Examples
 ~~~~~~~~
 
 ```bash
-dml html --input src/source.dml --output doc/index.html --styles src/linkthis.css,src/includethis.css:i --content src/source-content
+DmlCli.exe html --input src/source.dml --output doc/index.html --styles src/linkthis.css,src/includethis.css:i --content src/source-content
 ```
 
 Assuming inside `source-content` we got an `img` folder with some `.jpg` files, running the previous command [DML] will 
