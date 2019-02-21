@@ -1,7 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard1.4</TargetFramework>
+    <PackageId>dml</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Leo Brugnara</Authors>
+    <Description>A lightweight markup language that generates HTML and Markdown. Its key aspect is to be easy to write, easy to read and understandable in its raw form. Though simple, its design makes it flexible and powerful to easily generate new target outputs.</Description>
+    <RepositoryUrl>https://github.com/lbrugnara/dml</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseUrl>https://github.com/lbrugnara/dml/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/lbrugnara/dml</PackageProjectUrl>
+    <PackageTags>markup-language;html;markdown</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
 </Project>
