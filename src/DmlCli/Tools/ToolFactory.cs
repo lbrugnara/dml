@@ -10,9 +10,9 @@ namespace DmlCli.Tools
             switch (tool)
             {
                 case ToolType.HTML:
-                    return new Dml2Html();
+                    return new HtmlTool();
                 case ToolType.Markdown:
-                    return new Dml2Md();
+                    return new MarkdownTool();
             }
             return null;
         }

@@ -7,17 +7,18 @@ using DmlCli.Clap;
 
 namespace DmlCli.Tools.Envs
 {
-    public class MdToolEnv : BaseEnv<MdToolEnv>
+    public class MarkdownToolEnv : BaseEnv<MarkdownToolEnv>
     {
-        public List<string> InputFiles = new List<string>();
-        public string OutputFile;
-        public string TokensOutputFile;
+        public List<string> InputFiles { get; private set; }
+        public string OutputFile { get; set; }
+        public string TokensOutputFile { get; private set; }
         public int? Watch;
         public bool Interactive;
         
-        public MdToolEnv(Parameters<MdToolEnv> parmeters)
+        public MarkdownToolEnv(Parameters<MarkdownToolEnv> parmeters)
             : base (parmeters)
         {
+            this.InputFiles = new List<string>();
         }
 
         public void Reset()

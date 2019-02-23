@@ -8,138 +8,178 @@ using System.Linq;
 
 namespace DmlCli.Clap
 {
-    public class Parameters<TEnv> : KeyedCollection<string, Parameter<TEnv>>
-        where TEnv : ClapEnv<TEnv>
+    public class Parameters<TEnvironment> : KeyedCollection<string, Parameter<TEnvironment>> where TEnvironment : ClapEnvironment<TEnvironment>
     {
-        private List<Parameter<TEnv>> parameters;
+        /// <summary>
+        /// List of environment's parameters
+        /// </summary>
+        private List<Parameter<TEnvironment>> EnvironmentParameters;
 
         public Parameters()
         {
-            parameters = new List<Parameter<TEnv>>();
+            EnvironmentParameters = new List<Parameter<TEnvironment>>();
         }
 
+        /// <summary>
+        /// Returns the formatted help message
+        /// </summary>
+        /// <returns></returns>
         public string GetHelpMessage()
         {
-            return string.Join("\n", parameters.Select(p => {
+            return string.Join("\n", EnvironmentParameters.Select(p => {
                 string name = string.Format("  {0}{1}{2}", p.ShortName, p.LongName != null ? "|":"", p.LongName);
                 string desc = string.Format("\t{0}", p.GetFormattedDescription(name.Length), p.Attributes.ToString());
-                string attrs = p.Attributes != ParamAttrs.None ? $" ({p.Attributes.ToString()})" : "";
+                string attrs = p.Attributes != ParameterAttribute.None ? $" ({p.Attributes.ToString()})" : "";
                 return name + desc + attrs + "\n";
             }));
         }
 
-        public Parameter<TEnv> Add (string shortopt, string longopt, string description, Action<TEnv, string> handler, ParamAttrs attributes)
+        public Parameter<TEnvironment> Add (string shortopt, string longopt, string description, Action<TEnvironment> handler, ParameterAttribute attributes)
 		{
-            var p = new Parameter<TEnv>(shortopt, longopt, description, handler, attributes);
-            parameters.Add(p);
+            var p = new VoidParameter<TEnvironment>(shortopt, longopt, description, attributes, handler);
+            EnvironmentParameters.Add(p);
             return p;
         }
 
-        public Parameter<TEnv> Add (string shortopt, string longopt, string description, Action<TEnv, string[]> handler, ParamAttrs attributes)
+        public Parameter<TEnvironment> Add (string shortopt, string longopt, string description, Action<TEnvironment, string> handler, ParameterAttribute attributes)
 		{
-            var p = new Parameter<TEnv>(shortopt, longopt, description, handler, attributes);
-            parameters.Add(p);
+            var p = new SingleValueParameter<TEnvironment>(shortopt, longopt, description, attributes, handler);
+            EnvironmentParameters.Add(p);
             return p;
         }
 
-        public Parameter<TEnv> Add (string shortopt, string longopt, string description, Action<TEnv> action, ParamAttrs attributes)
+        public Parameter<TEnvironment> Add (string shortopt, string longopt, string description, Action<TEnvironment, string[]> action, ParameterAttribute attributes)
 		{
-            var p = new Parameter<TEnv>(shortopt, longopt, description, action, attributes);
-            parameters.Add(p);
+            var p = new MultiValueParameter<TEnvironment>(shortopt, longopt, description, attributes, action);
+            EnvironmentParameters.Add(p);
             return p;
         }
 
-        protected override string GetKeyForItem(Parameter<TEnv> item)
+        protected override string GetKeyForItem(Parameter<TEnvironment> item)
         {
-            throw new NotImplementedException();
+            return item.ShortName;
         }
 
-        public bool Parse(TEnv env, string[] args)
+        public bool Parse(TEnvironment env, string[] args)
         {
-            List<Parameter<TEnv>> parsed = new List<Parameter<TEnv>>();
-            List<Parameter<TEnv>> parameters = this.parameters.ToList();
+            // Create a copy of the list to track already parsed parameters
+            var parameters = this.EnvironmentParameters.ToList();
+
             int index = 0;
-            while (index < args.Length)
+            bool shouldBreak = false;
+            while (!shouldBreak && index < args.Length)
             {
                 string argument = args.ElementAtOrDefault(index++);
-                Parameter<TEnv> param = parameters.Where(p => p.ShortName == argument || p.LongName == argument).Select(p => p).FirstOrDefault();
-                if (param == null)
-                {
+
+                // Get the parameter matching this argument
+                var parameter = parameters.FirstOrDefault(p => p.ShortName == argument || p.LongName == argument);
+
+                if (parameter == null)
                     continue;
-                }
 
-                bool isSubModule = param.Attributes.HasFlag(ParamAttrs.SubModule);
+                // Remove the parameter we found so we won't process it again
+                parameters.Remove(parameter);
 
-                if (isSubModule)
+                switch (parameter)
                 {
-                    param.ParamsHandler(env, args.Skip(index).ToArray());
-                }
-                else if (param.Action != null)
-                {
-                    param.Action(env);
-                }
-                else if (param.Handler != null)
-                {
-                    string nextArg = args.ElementAtOrDefault(index);
-                    bool isEnd = string.IsNullOrEmpty(nextArg);
-                    bool isOtherParam = !isEnd && nextArg.StartsWith("-") && parameters.Any(p => p.ShortName == nextArg || p.LongName == nextArg);
-                    bool isRequired = param.IsRequired();
-                    bool hasOptionalValue = param.Attributes.HasFlag(ParamAttrs.OptionalValue);
+                    case VoidParameter<TEnvironment> sp:
+                        this.ParseVoidParamater(sp, env);
+                        break;
 
-                    if ((isEnd || isOtherParam) && !hasOptionalValue)
-                    {
-                        env.Errors.Add(string.Format("Parameter {0} is required", param.LongName ?? param.ShortName));
-                        return false;
-                    }
+                    case SingleValueParameter<TEnvironment> svp:
+                        this.ParseSingleValueParamater(svp, env, args, ref index);
+                        break;
 
-                    if (hasOptionalValue && (isEnd || isOtherParam))
-                    {
-                        index++;
-                        nextArg = null;
-                    }
+                    case MultiValueParameter<TEnvironment> mvp:
+                        this.ParseMultiValueParameter(mvp, env, args, ref index);
 
-                    param.Handler(env, nextArg);
-                }
-                else if (param.ParamsHandler != null && param.Attributes.HasFlag(ParamAttrs.Multiple))
-                {
-                    bool isRequiredParameter = param.IsRequired();
-                    bool hasOptionalValue = param.Attributes.HasFlag(ParamAttrs.OptionalValue);
-                    List<string> arguments = new List<string>(); 
-                    bool isOtherParam = false;
-                    bool isEnd = false;
-                    do
-                    {
-                        string nextArg = args.ElementAtOrDefault(index);
-                        isEnd = string.IsNullOrEmpty(nextArg);
-                        isOtherParam = !isEnd && nextArg.StartsWith("-") && parameters.Any(p => p.ShortName == nextArg || p.LongName == nextArg);
-                        if (!isOtherParam && !isEnd)
-                        {
-                            arguments.Add(nextArg);
-                            index++;
-                        }
-                    } while (!isOtherParam && !isEnd);
-                    
-                    if (arguments.Count == 0 && (!hasOptionalValue || isRequiredParameter))
-                    {
-                        env.Errors.Add(string.Format("Parameter {0} is required", param.LongName ?? param.ShortName));
-                        return false;
-                    }
+                        // The submodule process the rest of the arguments, so we need to leave
+                        if (mvp.Attributes.HasFlag(ParameterAttribute.SubModule))
+                            shouldBreak = true;
 
-                    param.ParamsHandler(env, arguments.ToArray());
+                        break;
+
+                    default:
+                        throw new Exception("ClapEnv is misconfigured");
                 }
-                else
-                {
-                    throw new Exception("ClapEnv is misconfigured");
-                }
-                parameters.Remove(param);
-                parsed.Add(param);
-                if (isSubModule)
-                    break;
             }
 
             env.Error = parameters.Any(p => p.IsRequired());
             parameters.Where(p => p.IsRequired()).ToList().ForEach(p => env.Errors.Add(string.Format("Parameter {0} is required", p.LongName ?? p.ShortName)));
             return !env.Error;
+        }
+
+        private void ParseVoidParamater(VoidParameter<TEnvironment> parameter, TEnvironment env)
+        {
+            parameter.Handler.Invoke(env);
+        }
+
+        private void ParseSingleValueParamater(SingleValueParameter<TEnvironment> parameter, TEnvironment env, string[] args, ref int index)
+        {
+            string nextArg = args.ElementAtOrDefault(index);
+            bool isEnd = string.IsNullOrEmpty(nextArg);
+            bool isOtherParam = !isEnd && nextArg.StartsWith("-") && this.EnvironmentParameters.Any(p => p.ShortName == nextArg || p.LongName == nextArg);
+            bool isRequired = parameter.IsRequired();
+            bool hasOptionalValue = parameter.Attributes.HasFlag(ParameterAttribute.OptionalValue);
+
+            if ((isEnd || isOtherParam) && !hasOptionalValue)
+            {
+                env.Errors.Add(string.Format("Parameter {0} is required", parameter.LongName ?? parameter.ShortName));
+                return;
+            }
+
+            if (hasOptionalValue && (isEnd || isOtherParam))
+            {
+                index++;
+                nextArg = null;
+            }
+
+            parameter.Handler.Invoke(env, nextArg);
+        }
+
+        private void ParseMultiValueParameter(MultiValueParameter<TEnvironment> parameter, TEnvironment env, string[] args, ref int index)
+        {
+            if (parameter.Attributes.HasFlag(ParameterAttribute.SubModule))
+            {
+                this.ParseMultiValueAsSubModule(parameter, env, args.Skip(index).ToArray());
+            }
+            else if (parameter.Attributes.HasFlag(ParameterAttribute.Multiple))
+            {
+                this.ParseMultiValueAsParameter(parameter, env, args, ref index);
+            }
+        }
+
+        private void ParseMultiValueAsSubModule(MultiValueParameter<TEnvironment> parameter, TEnvironment env, string[] args)
+        {
+            parameter.Handler.Invoke(env, args);
+        }
+
+        private void ParseMultiValueAsParameter(MultiValueParameter<TEnvironment> parameter, TEnvironment env, string[] args, ref int index)
+        {
+            bool isRequiredParameter = parameter.IsRequired();
+            bool hasOptionalValue = parameter.Attributes.HasFlag(ParameterAttribute.OptionalValue);
+            List<string> arguments = new List<string>();
+            bool isOtherParam = false;
+            bool isEnd = false;
+            do
+            {
+                string nextArg = args.ElementAtOrDefault(index);
+                isEnd = string.IsNullOrEmpty(nextArg);
+                isOtherParam = !isEnd && nextArg.StartsWith("-") && this.EnvironmentParameters.Any(p => p.ShortName == nextArg || p.LongName == nextArg);
+                if (!isOtherParam && !isEnd)
+                {
+                    arguments.Add(nextArg);
+                    index++;
+                }
+            } while (!isOtherParam && !isEnd);
+
+            if (arguments.Count == 0 && (!hasOptionalValue || isRequiredParameter))
+            {
+                env.Errors.Add(string.Format("Parameter {0} is required", parameter.LongName ?? parameter.ShortName));
+                return;
+            }
+
+            parameter.Handler.Invoke(env, arguments.ToArray());
         }
     }
 }

@@ -6,8 +6,8 @@ using DmlCli.Clap;
 
 namespace DmlCli.Tools.Envs
 {
-    public class BaseEnv<T> : ClapEnv<T>
-        where T : ClapEnv<T>
+    public class BaseEnv<T> : ClapEnvironment<T>
+        where T : ClapEnvironment<T>
     {
         public BaseEnv(Parameters<T> parameters) 
             : base(parameters)

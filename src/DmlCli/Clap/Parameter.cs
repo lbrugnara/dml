@@ -1,85 +1,73 @@
 ﻿// Copyright (c) Leonardo Brugnara
 // Full copyright and license information in LICENSE file
 
-using System;
-
 namespace DmlCli.Clap
 {
-    [Flags]
-    public enum ParamAttrs
-    {
-        None = 0,
-        Optional = 1,
-        OptionalValue = 2,
-        SubModule = 4,
-        Multiple = 8
-    }
+    public delegate void ParameterHandler<TEnvironment>(TEnvironment env, params string[] arguments);
 
-    public class Parameter<TEnv>
-        where TEnv : ClapEnv<TEnv>
+    public abstract class Parameter<TEnvironment> where TEnvironment : ClapEnvironment<TEnvironment>
     {
-        private string _shortName;
-        private string _longName;
-        private string _description;
-        private Action<TEnv, string> _paramHandler;
-        private Action<TEnv, string[]> _paramsHandler;
-        private Action<TEnv> _action;
-        private ParamAttrs _attributes;
+        public Parameter(string shortopt, string longopt, string description, ParameterAttribute attributes)
+        {
+            ShortName = shortopt;
+            LongName = longopt;
+            Description = description;
+            Attributes = attributes;
+        }
+
+        /// <summary>
+        /// Parameter's short name
+        /// </summary>
+        public string ShortName { get; }
+
+        /// <summary>
+        /// Parameter's long name
+        /// </summary>
+        public string LongName { get; }
+
+        /// <summary>
+        /// Parameter description
+        /// </summary>
+        public string Description { get; }
         
-        public Parameter(string shortopt, string longopt, string description, Action<TEnv, string> handler, ParamAttrs attributes)
-        {
-            _shortName = shortopt;
-            _longName = longopt;
-            _description = description;
-            _paramHandler = handler;
-            _action = null;
-            _attributes = attributes;
-        }
+        /// <summary>
+        /// Parameter's attributes that determine the behavior
+        /// </summary>
+        public ParameterAttribute Attributes { get; }
 
-        public Parameter(string shortopt, string longopt, string description, Action<TEnv, string[]> subModuleArgs, ParamAttrs attributes)
-        {
-            _shortName = shortopt;
-            _longName = longopt;
-            _description = description;
-            _paramsHandler = subModuleArgs;
-            _action = null;
-            _attributes = attributes;
-        }
-
-        public Parameter(string shortopt, string longopt, string description, Action<TEnv> action, ParamAttrs attributes)
-        {
-            _shortName = shortopt;
-            _longName = longopt;
-            _description = description;
-            _paramHandler = null;
-            _action = action;
-            _attributes = attributes;
-        }
-
-        public string ShortName { get => _shortName; }
-        public string LongName { get => _longName; }
-        public string Description { get => _description; }
-        public Action<TEnv, string> Handler { get => _paramHandler; }
-        public Action<TEnv, string[]> ParamsHandler { get => _paramsHandler; }
-        public Action<TEnv> Action { get => _action; }
-        public ParamAttrs Attributes {get => _attributes; }
-
+        /// <summary>
+        /// Returns true if the parameter is required by checking if the <see cref="ParameterAttribute.Optional"/> is missing and
+        /// the parameter is not a <see cref="ParameterAttribute.SubModule"/>
+        /// </summary>
+        /// <returns>True if the parameter is required</returns>
         public bool IsRequired()
         {
-            return !Attributes.HasFlag(ParamAttrs.Optional) && !Attributes.HasFlag(ParamAttrs.SubModule);
+            return !Attributes.HasFlag(ParameterAttribute.Optional) && !Attributes.HasFlag(ParameterAttribute.SubModule);
         }
 
+        /// <summary>
+        /// The delegate handler that will be called once the parameter has 
+        /// been parsed in order to update the TEnvironment
+        /// </summary>
+        public abstract ParameterHandler<TEnvironment> Handler { get; }
+
+        /// <summary>
+        /// Returns the parameter description formatted to show in the
+        /// help message
+        /// </summary>
+        /// <param name="neededpad"></param>
+        /// <returns></returns>
         public string GetFormattedDescription(int neededpad)
         {
-            if (_description == null)
+            if (Description == null)
                 return "\t";
             string desc = "\t";
             bool needsBreak = false;
-            for (int i=0; i < _description.Length; i++)
+            for (int i=0; i < Description.Length; i++)
             {
                 if (i > 0 && i % 120 == 0)
                 {
-                    if (_description[i] == ' ')
+                    if (Description[i] == ' ')
                     {
                         desc += "\n\t".PadRight(neededpad, ' ') + "\t";
                     }
@@ -88,12 +76,12 @@ namespace DmlCli.Clap
                         needsBreak = true;
                     }
                 }
-                else if (needsBreak && _description[i-1] == ' ')
+                else if (needsBreak && Description[i-1] == ' ')
                 {
                     needsBreak = false;
                     desc += "\n\t".PadRight(neededpad, ' ') + "\t";
                 }
-                desc += _description[i];
+                desc += Description[i];
             }
             return desc;
         }

@@ -13,29 +13,20 @@ namespace DmlCli
         {
             Parameters<DmlCliEnv> p = new Parameters<DmlCliEnv>()
             {
-                { "html",       null,      "Use it to translate from DML to HTML",
-                    (e, moduleArgs) => { e.Tool = ToolType.HTML; e.Args = moduleArgs; },      
-                    ParamAttrs.SubModule
-                },
+                { "html", null, "Use it to translate from DML to HTML", (e, moduleArgs) => { e.Tool = ToolType.HTML; e.Args = moduleArgs; }, ParameterAttribute.SubModule },
                 
-                { "markdown",   "md",      "Use it to translate from DML to Markdown",
-                    (e, moduleArgs) => { e.Tool = ToolType.Markdown; e.Args = moduleArgs; },
-                    ParamAttrs.SubModule
-                },
-                
-                { "-h",         "--help",  "Show this message",
-                    (e) => e.RequestHelpMessage(),
-                    ParamAttrs.Optional 
-                }
+                { "markdown", "md", "Use it to translate from DML to Markdown", (e, moduleArgs) => { e.Tool = ToolType.Markdown; e.Args = moduleArgs; }, ParameterAttribute.SubModule },
+
+                { "-h", "--help",  "Show this message", e => e.RequestHelpMessage(), ParameterAttribute.Optional }
             };
 
-            DmlCliEnv env = new DmlCliEnv(p);
+            var env = new DmlCliEnv(p);
 
             if (!env.ProcessEnvArguments(args))
                 return;
 
 
-            ITool tool = ToolFactory.Create(env.Tool.Value);
+            var tool = ToolFactory.Create(env.Tool.Value);
 
             if (!tool.ProcessArguments(env.Args))
                 return;

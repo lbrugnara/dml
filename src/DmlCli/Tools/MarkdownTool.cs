@@ -15,33 +15,33 @@ using DmlLib.Core.Nodes;
 
 namespace DmlCli.Tools
 {
-    public class Dml2Md : ITool
+    public class MarkdownTool : ITool
     {
-        private static Parameters<MdToolEnv> Parameters = new Parameters<MdToolEnv>()
+        private static Parameters<MarkdownToolEnv> Parameters = new Parameters<MarkdownToolEnv>()
         {
-            { "-i", "--input",      "Source file",          (e, p)  => e.InputFiles.AddRange(p), ParamAttrs.Optional | ParamAttrs.Multiple},
+            { "-i", "--input",      "Source file",          (e, p)  => e.InputFiles.AddRange(p), ParameterAttribute.Optional | ParameterAttribute.Multiple},
 
-            { "-it", "--interactive", "Interactive mode",   (e) => e.Interactive = true, ParamAttrs.Optional },
+            { "-it", "--interactive", "Interactive mode",   (e) => e.Interactive = true, ParameterAttribute.Optional },
 
             { "-o", "--output",     "Destination file. If it is not specified the output will be sent " +
                                     "to stdout. If it includes paths, they will be created and the parent path " +
                                     "of the file will be considered the root directory of the 'project'.",
-                                                            (e, p)  => e.OutputFile = p,                ParamAttrs.Optional        },
+                                                            (e, p)  => e.OutputFile = p,                ParameterAttribute.Optional        },
 
             { "-w", "--watch",      "Detects changes in the input file, scripts, styles and other resources " +
                                     "to trigger the parsing process. If present, the watch will run every 1000ms. " +
                                     "If user provides a value it will be used instead",
                                                             (e, p)  => e.Watch = int.TryParse(p, out int pt) ? pt : 1000,
-                                                                                                        ParamAttrs.Optional | ParamAttrs.OptionalValue  },
+                                                                                                        ParameterAttribute.Optional | ParameterAttribute.OptionalValue  },
 
-            { "-h", "--help",       "Show this message",    (e)     => e.RequestHelpMessage(),           ParamAttrs.Optional       }
+            { "-h", "--help",       "Show this message",    (e)     => e.RequestHelpMessage(),           ParameterAttribute.Optional       }
         };
 
-        private MdToolEnv env;
+        private MarkdownToolEnv env;
 
         public bool ProcessArguments(string[] args)
         {
-            env = new MdToolEnv(Parameters);
+            env = new MarkdownToolEnv(Parameters);
             return env.ProcessEnvArguments(args);
         }
 
