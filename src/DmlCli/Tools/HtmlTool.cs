@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using DmlCli.Clap;
+using CmdOpt.Options;
 using DmlCli.Observer;
 using DmlCli.Tools.Envs;
 using DmlLib.Core;
@@ -16,61 +16,55 @@ namespace DmlCli.Tools
 {
     public class HtmlTool : ITool
     {
-        private static Parameters<HtmlToolEnv> Parameters = new Parameters<HtmlToolEnv>()
+        private static readonly HtmlToolEnv Env = new HtmlToolEnv()
         {
-            { "-i", "--input",      "Source file",          (e, p)  => e.InputFiles.AddRange(p), ParameterAttribute.Optional | ParameterAttribute.Multiple},
+            { "-i", "--input",      "Source file",          (e, p)  => e.InputFiles.AddRange(p), OptionAttributes.Optional | OptionAttributes.MultiValue},
 
-            { "-it", "--interactive", "Interactive mode",   (e) => e.Interactive = true, ParameterAttribute.Optional },
+            { "-it", "--interactive", "Interactive mode",   (e) => e.Interactive = true, OptionAttributes.Optional },
 
             { "-o", "--output",     "Destination file. If it is not specified the output will be sent " +
                                     "to stdout. If it includes paths, they will be created and the parent path " +
                                     "of the file will be considered the root directory of the 'project'.",
-                                                            (e, p)  => e.OutputFile = p,                ParameterAttribute.Optional        },
+                                                            (e, p)  => e.OutputFile = p,                OptionAttributes.Optional        },
 
             { "-s", "--styles",     "Comma-separated list of CSS files to be linked to the document. "+
                                     "If at the end of each file the characters :i are appended, the style will " +
                                     "be included in an style tag, if not, it will be used with a link tag and the " +
                                     ".css files will be copied to the [css] directory.",
-                                                            (e, p)  => e.Styles.AddRange(p.Split(',')), ParameterAttribute.Optional        },
+                                                            (e, p)  => e.Styles.AddRange(p.Split(',')), OptionAttributes.Optional        },
 
             { "-js", "--scripts",   "Comma-separated list of JS files to be linked to the document. They will " +
                                     "be copied to the [js] folder.",
-                                                            (e, p)  => e.Scripts.AddRange(p.Split(',')), ParameterAttribute.Optional       },
-            
+                                                            (e, p)  => e.Scripts.AddRange(p.Split(',')), OptionAttributes.Optional       },
+
             { "-c", "--content",    "Comma-separated list of resources files and directories to be copied to the " +
                                     "[content] folder",
-                                                            (e, p)  => e.Resources.AddRange(p.Split(',')), ParameterAttribute.Optional     },
+                                                            (e, p)  => e.Resources.AddRange(p.Split(',')), OptionAttributes.Optional     },
 
             { "-a", "--append",     "If destination file exists, the output is appended to it, " +
                                     "if not the output file will be created",
-                                                                (e)     => e.AppendOutput = true,          ParameterAttribute.Optional     },
+                                                                (e)     => e.AppendOutput = true,          OptionAttributes.Optional     },
 
             { "-b", "--body",       "If present, the output is just the body inner xml (without body tags)",
-                                                                (e)     => e.JustBodyContent = true,      ParameterAttribute.Optional      },
+                                                                (e)     => e.JustBodyContent = true,      OptionAttributes.Optional      },
             
             /*{ "-d", "--document",   "HTML file to load and to replace its body with the result of the parsing. " +
                                     "If --append is present, the output will be appended to the document body.",        
                                                                 (e)      => e.Document = p,              false   },*/
 
-            { "-t", "--tokens",     "Saves the tokenization phase in the file specified by this parameter",    
-                                                            (e, p)  => e.TokensOutputFile = p,           ParameterAttribute.Optional       },
+            { "-t", "--tokens",     "Saves the tokenization phase in the file specified by this parameter",
+                                                            (e, p)  => e.TokensOutputFile = p,           OptionAttributes.Optional       },
 
             { "-w", "--watch",      "Detects changes in the input file, scripts, styles and other resources " +
                                     "to trigger the parsing process. If present, the watch will run every 1000ms. " +
-                                    "If user provides a value it will be used instead",          
+                                    "If user provides a value it will be used instead",
                                                             (e, p)  =>  e.Watch = int.TryParse(p, out int pt) ? pt : 1000,
-                                                                                                         ParameterAttribute.Optional | ParameterAttribute.OptionalValue  },
+                                                                                                            OptionAttributes.Optional | OptionAttributes.OptionalValue  },
 
-            { "-h", "--help",       "Show this message",    (e)     => e.RequestHelpMessage(),           ParameterAttribute.Optional       }
+            { "-h", "--help",       "Show this message",    (e)     => e.RequestHelpMessage(),           OptionAttributes.Optional       }
         };
 
-        private HtmlToolEnv Env { get; set; }
-
-        public bool ProcessArguments(string[] args)
-        {
-            Env = new HtmlToolEnv(Parameters);
-            return Env.ProcessEnvArguments(args);
-        }
+        public bool ProcessArguments(string[] args) => Env.ProcessEnvArguments(args);
 
         public void Run()
         {

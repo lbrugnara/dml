@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Leonardo Brugnara
 // Full copyright and license information in LICENSE file
 
-using DmlCli.Clap;
+using CmdOpt.Options;
 using DmlCli.Tools;
 using DmlCli.Tools.Envs;
 
@@ -9,26 +9,24 @@ namespace DmlCli
 {
     class DmlCli
     {
+        private static DmlCliEnv Env = new DmlCliEnv()
+        {
+            { "html", null, "Use it to translate from DML to HTML", (env, arguments) => { env.Tool = ToolType.HTML; env.Args = arguments; }, OptionAttributes.SubModule },
+
+            { "markdown", "md", "Use it to translate from DML to Markdown", (env, arguments) => { env.Tool = ToolType.Markdown; env.Args = arguments; }, OptionAttributes.SubModule },
+
+            { "-h", "--help",  "Show this message", env => env.RequestHelpMessage(), OptionAttributes.Optional }
+        };
+
         static void Main(string[] args)
         {
-            Parameters<DmlCliEnv> p = new Parameters<DmlCliEnv>()
-            {
-                { "html", null, "Use it to translate from DML to HTML", (e, moduleArgs) => { e.Tool = ToolType.HTML; e.Args = moduleArgs; }, ParameterAttribute.SubModule },
-                
-                { "markdown", "md", "Use it to translate from DML to Markdown", (e, moduleArgs) => { e.Tool = ToolType.Markdown; e.Args = moduleArgs; }, ParameterAttribute.SubModule },
-
-                { "-h", "--help",  "Show this message", e => e.RequestHelpMessage(), ParameterAttribute.Optional }
-            };
-
-            var env = new DmlCliEnv(p);
-
-            if (!env.ProcessEnvArguments(args))
+            if (!Env.ProcessEnvArguments(args))
                 return;
 
 
-            var tool = ToolFactory.Create(env.Tool.Value);
+            var tool = ToolFactory.Create(Env.Tool.Value);
 
-            if (!tool.ProcessArguments(env.Args))
+            if (!tool.ProcessArguments(Env.Args))
                 return;
             
             tool.Run();

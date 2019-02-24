@@ -2,17 +2,12 @@
 // Full copyright and license information in LICENSE file
 
 using System;
-using DmlCli.Clap;
+using CmdOpt.Environment;
 
 namespace DmlCli.Tools.Envs
 {
-    public class BaseEnv<T> : ClapEnvironment<T>
-        where T : ClapEnvironment<T>
+    public class BaseEnv<T> : Environment<T> where T : Environment<T>
     {
-        public BaseEnv(Parameters<T> parameters) 
-            : base(parameters)
-        {
-        }
 
         protected override string OnBeforeHelpMessage()
         {
@@ -28,7 +23,7 @@ namespace DmlCli.Tools.Envs
             "Copyright (c) Leo Brugnara\n\n";
         }
 
-        public override void ValidateParameters()
+        public override void ValidateOptions()
         {
             throw new NotImplementedException();
         }

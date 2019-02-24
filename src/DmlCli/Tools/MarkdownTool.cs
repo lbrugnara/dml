@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using DmlCli.Clap;
+using CmdOpt.Options;
 using DmlCli.Observer;
 using DmlCli.Tools.Envs;
 using DmlLib.Core;
@@ -17,42 +17,36 @@ namespace DmlCli.Tools
 {
     public class MarkdownTool : ITool
     {
-        private static Parameters<MarkdownToolEnv> Parameters = new Parameters<MarkdownToolEnv>()
+        private static readonly MarkdownToolEnv Env = new MarkdownToolEnv()
         {
-            { "-i", "--input",      "Source file",          (e, p)  => e.InputFiles.AddRange(p), ParameterAttribute.Optional | ParameterAttribute.Multiple},
+            { "-i", "--input",      "Source file",          (e, p)  => e.InputFiles.AddRange(p), OptionAttributes.Optional | OptionAttributes.MultiValue},
 
-            { "-it", "--interactive", "Interactive mode",   (e) => e.Interactive = true, ParameterAttribute.Optional },
+            { "-it", "--interactive", "Interactive mode",   (e) => e.Interactive = true, OptionAttributes.Optional },
 
             { "-o", "--output",     "Destination file. If it is not specified the output will be sent " +
                                     "to stdout. If it includes paths, they will be created and the parent path " +
                                     "of the file will be considered the root directory of the 'project'.",
-                                                            (e, p)  => e.OutputFile = p,                ParameterAttribute.Optional        },
+                                                            (e, p)  => e.OutputFile = p,                OptionAttributes.Optional        },
 
             { "-w", "--watch",      "Detects changes in the input file, scripts, styles and other resources " +
                                     "to trigger the parsing process. If present, the watch will run every 1000ms. " +
                                     "If user provides a value it will be used instead",
                                                             (e, p)  => e.Watch = int.TryParse(p, out int pt) ? pt : 1000,
-                                                                                                        ParameterAttribute.Optional | ParameterAttribute.OptionalValue  },
+                                                                                                        OptionAttributes.Optional | OptionAttributes.OptionalValue  },
 
-            { "-h", "--help",       "Show this message",    (e)     => e.RequestHelpMessage(),           ParameterAttribute.Optional       }
+            { "-h", "--help",       "Show this message",    (e)     => e.RequestHelpMessage(),           OptionAttributes.Optional       }
         };
 
-        private MarkdownToolEnv env;
-
-        public bool ProcessArguments(string[] args)
-        {
-            env = new MarkdownToolEnv(Parameters);
-            return env.ProcessEnvArguments(args);
-        }
+        public bool ProcessArguments(string[] args) => Env.ProcessEnvArguments(args);
 
         public void Run()
         {
-            if (env.Watch.HasValue)
+            if (Env.Watch.HasValue)
             {
-                List<string> observed = new List<string>(env.InputFiles);
-                FileObserver.OnFileChangeDetect(observed, env.Watch.Value, () => Exec(string.Join("\n\n", env.InputFiles.Select(f => File.ReadAllText(f)))));
+                List<string> observed = new List<string>(Env.InputFiles);
+                FileObserver.OnFileChangeDetect(observed, Env.Watch.Value, () => Exec(string.Join("\n\n", Env.InputFiles.Select(f => File.ReadAllText(f)))));
             }
-            else if (env.Interactive)
+            else if (Env.Interactive)
             {
                 Console.WriteLine("DML CLI (Interactive mode)");
                 Console.WriteLine("Copyright (c) Leo Brugnara\n");
@@ -81,7 +75,7 @@ namespace DmlCli.Tools
             }
             else
             {
-                Exec(string.Join("\n\n", env.InputFiles.Select(f => File.ReadAllText(f))));
+                Exec(string.Join("\n\n", Env.InputFiles.Select(f => File.ReadAllText(f))));
             }
         }
 
@@ -96,14 +90,14 @@ namespace DmlCli.Tools
             mdctx.CodeBlockSupport = CodeBlockSupport.Full;
             string output = doc.Body.ToMarkdown(mdctx);
 
-            if (env.OutputFile != null)
+            if (Env.OutputFile != null)
             {
-                DirectoryInfo di = new FileInfo(env.OutputFile).Directory;
+                DirectoryInfo di = new FileInfo(Env.OutputFile).Directory;
                 if (!di.Exists)
                 {
                     di.Create();
                 }
-                File.WriteAllText(env.OutputFile, output);
+                File.WriteAllText(Env.OutputFile, output);
             }
             else
             {

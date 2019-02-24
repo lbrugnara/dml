@@ -3,14 +3,13 @@
 
 using System.Collections.Generic;
 using System.IO;
-using DmlCli.Clap;
 
 namespace DmlCli.Tools.Envs
 {
     public class HtmlToolEnv : BaseEnv<HtmlToolEnv>
     {
-        public HtmlToolEnv(Parameters<HtmlToolEnv> parmeters)
-            : base (parmeters)
+        public HtmlToolEnv()
+            : base ()
         {
             this.InputFiles = new List<string>();
             this.Styles = new List<string>();
@@ -79,7 +78,7 @@ namespace DmlCli.Tools.Envs
         /// </summary>
         public void Reset()
         {
-            showHelp = false;
+            ShowHelp = false;
             this.InputFiles.Clear();
             this.OutputFile = null;
             this.TokensOutputFile = null;
@@ -91,11 +90,10 @@ namespace DmlCli.Tools.Envs
             this.Resources.Clear();
         }
 
-        public override void ValidateParameters()
+        public override void ValidateOptions()
         {
             if (InputFiles.Count == 0 && !this.Interactive)
             {
-                Error = true;
                 Errors.Add(string.Format("No input files"));
                 return;
             }
@@ -103,17 +101,11 @@ namespace DmlCli.Tools.Envs
             foreach (var inputFile in InputFiles)
             {
                 if (!File.Exists(inputFile))
-                {
-                    Error = true;
                     Errors.Add(string.Format("Input file '{0}' does not exist", inputFile));
-                }
             }
 
             if (this.Watch.HasValue && this.Interactive)
-            {
-                this.Error = true;
                 this.Errors.Add("Cannot use watch while in interactive mode");
-            }
         }
     }
 }

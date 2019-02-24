@@ -3,7 +3,6 @@
 
 using System.Collections.Generic;
 using System.IO;
-using DmlCli.Clap;
 
 namespace DmlCli.Tools.Envs
 {
@@ -15,25 +14,24 @@ namespace DmlCli.Tools.Envs
         public int? Watch;
         public bool Interactive;
         
-        public MarkdownToolEnv(Parameters<MarkdownToolEnv> parmeters)
-            : base (parmeters)
+        public MarkdownToolEnv()
+            : base ()
         {
             this.InputFiles = new List<string>();
         }
 
         public void Reset()
         {
-            showHelp = false;
+            ShowHelp = false;
             InputFiles = new List<string>();
             OutputFile = null;
             TokensOutputFile = null;
         }
 
-        public override void ValidateParameters()
+        public override void ValidateOptions()
         {
             if (InputFiles.Count == 0 && !this.Interactive)
             {
-                Error = true;
                 Errors.Add(string.Format("No input files"));
                 return;
             }
@@ -41,17 +39,11 @@ namespace DmlCli.Tools.Envs
             foreach (var inputFile in InputFiles)
             {
                 if (!File.Exists(inputFile))
-                {
-                    Error = true;
                     Errors.Add(string.Format("Input file '{0}' does not exist", inputFile));
-                }
             }
 
             if (this.Watch.HasValue && this.Interactive)
-            {
-                this.Error = true;
                 this.Errors.Add("Cannot use watch while in interactive mode");
-            }
         }
     }
 }

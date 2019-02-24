@@ -1,7 +1,6 @@
 // Copyright (c) Leonardo Brugnara
 // Full copyright and license information in LICENSE file
 
-using DmlCli.Clap;
 
 namespace DmlCli.Tools.Envs
 {
@@ -10,18 +9,10 @@ namespace DmlCli.Tools.Envs
         public ToolType? Tool { get; set; }
         public string[] Args { get; set; }
 
-        public DmlCliEnv(Parameters<DmlCliEnv> parameters) 
-            : base(parameters)
-        {
-        }
-
-        public override void ValidateParameters()
+        public override void ValidateOptions()
         {
             if (!this.Tool.HasValue)
-            {
-                this.Error = true;
                 this.Errors.Add("Please select the tool to generate the output.");
-            }
         }
 
         protected override string OnBeforeHelpMessage()
