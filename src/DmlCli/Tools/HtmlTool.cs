@@ -9,8 +9,8 @@ using System.Text;
 using CmdOpt.Options;
 using DmlCli.Observer;
 using DmlCli.Tools.Envs;
-using DmlLib.Core;
-using DmlLib.Core.Nodes;
+using DmlLib.Semantic;
+using DmlLib.Nodes;
 
 namespace DmlCli.Tools
 {
