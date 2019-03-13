@@ -334,7 +334,16 @@ namespace DmlLib.Semantic
             // Check at least 4 white spaces
             lookahead = PeekChar(4);
 
-            if (isValidBlockStart && lookahead?.Length >= 4 && lookahead?.Trim() == string.Empty)
+            // If lookahead is null or it does not contain at least 4 chars, it is not a pre node
+            if (lookahead == null || lookahead.Length < 4)
+                return null;
+
+            // Cannot start a pre node if it is not a valid block start
+            if (!isValidBlockStart)
+                return null;
+
+            // If all chars are white space and are not new lines, it is an indent token
+            if (lookahead.All(c => char.IsWhiteSpace(c) && c != '\n'))
                 return new Token { Type = TokenType.Indentation, Value = ctx.Peek ? lookahead : this.ConsumeChar(4) };
 
             return null;
