@@ -10,53 +10,26 @@ namespace DmlLib.Nodes
 {
     public abstract class DmlElement
     {
-        protected string TagName;
-        private bool _endTag;
-        private Dictionary<string, object> _properties;
-        private Dictionary<string, string> _attributes;
-        protected List<DmlElement> children;
-        public DmlElement Parent { get; private set; }
-
-        public abstract DmlElementType ElementType { get; }
+        private readonly bool _endTag;
 
         public DmlElement(Dictionary<string, string> attrs = null, bool endTag = true)
         {
-            _attributes = attrs;
             _endTag = endTag;
-            children = new List<DmlElement>();
+            Attributes = attrs ?? new Dictionary<string, string>();
+            Properties = new Dictionary<string, object>();
+            Children = new List<DmlElement>();
         }
 
-        public Dictionary<string, string> Attributes
-        {
-            get
-            {
-                if (_attributes == null)
-                {
-                    _attributes = new Dictionary<string, string>();
-                }
-                return _attributes;
-            }
-        }
+        protected string TagName { get; set; }
+        public Dictionary<string, object> Properties { get; private set; }
+        public Dictionary<string, string> Attributes { get; private set; }
+        public virtual List<DmlElement> Children { get; private set; }
+        public DmlElement Parent { get; private set; }
+        public abstract DmlElementType ElementType { get; }
 
-        public Dictionary<string, object> Properties
-        {
-            get
-            {
-                if (_properties == null)
-                {
-                    _properties = new Dictionary<string, object>();
-                }
-                return _properties;
-            }
-        }
+        public virtual string InnerText => string.Join("", Children.Select(c => c.InnerText));
 
-        public virtual string InnerXml
-        {
-            get
-            {
-                return String.Join("", children.Select(c => c.OuterXml));
-            }
-        }
+        public virtual string InnerXml => string.Join("", Children.Select(c => c.OuterXml));
 
         public virtual string OuterXml
         {
@@ -66,58 +39,39 @@ namespace DmlLib.Nodes
                 if (Attributes != null)
                 {
                     foreach (var key in Attributes.Keys)
-                    {
-                        attrs += string.Format(" {0}=\"{1}\"", key, Attributes[key]);
-                    }
+                        attrs += $" {key}=\"{this.Attributes[key]}\"";
                 }
+
                 if (_endTag)
-                {
-                    return "<" + TagName + attrs + ">" + String.Join("", children.Select(c => c.OuterXml)) + "</"+ TagName +">";
-                }
-                return "<" + TagName + attrs + " />";
+                    return $"<{this.TagName}{attrs}>{string.Join("", this.Children.Select(c => c.OuterXml))}</{this.TagName}>";
+
+                return $"<{this.TagName}{attrs} />";
             }
         }
 
-        public virtual List<DmlElement> Children
-        {
-            get
-            {
-                return this.children;
-            }
-        }
-
-        public virtual string ToMarkdown(MarkdownTranslationContext ctx)
-        {
-            return String.Join("", children.Select(c => c.ToMarkdown(ctx)));
-        }
+        public virtual string ToMarkdown(MarkdownTranslationContext ctx) => string.Join("", Children.Select(c => c.ToMarkdown(ctx)));
 
         public void AddChild(DmlElement element)
         {
             element.Parent = this;
-            children.Add(element);
+            Children.Add(element);
         }
 
         public void InsertChild(int index, DmlElement element)
         {
             element.Parent = this;
-            children.Insert(index, element);
+            Children.Insert(index, element);
         }
 
         public void MergeChildren(DmlElement elements)
         {
-            elements.children.ForEach(n => n.Parent = this);
-            elements.children.ForEach(children.Add);
+            elements.Children.ForEach(n => n.Parent = this);
+            elements.Children.ForEach(Children.Add);
         }
 
-        public DmlElement LastChild()
-        {
-            return children.LastOrDefault();
-        }
+        public DmlElement LastChild() => Children.LastOrDefault();
 
-        public bool HasChildren()
-        {
-            return children.Count > 0;
-        }
+        public bool HasChildren() => Children.Count > 0;
 
         public bool AncestorIs(params DmlElementType[] t)
         {

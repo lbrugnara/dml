@@ -23,6 +23,8 @@ namespace DmlLib.Nodes
             }
         }
 
+        public override string InnerText => this.Content;
+
         public override string InnerXml
         {
             get

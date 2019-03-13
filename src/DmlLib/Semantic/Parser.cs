@@ -209,7 +209,7 @@ namespace DmlLib.Semantic
 
                 // If the token value ends with a dot and the next token we have to process is a NL
                 // we need to add a line break to honor the grammatical paragraph
-                if (token.Value?.EndsWith(".") == true && this.PeekToken()?.Type == TokenType.NewLine)
+                if (this.Output.Last.Value.InnerText.Trim()?.EndsWith(".") == true && this.PeekToken()?.Type == TokenType.NewLine)
                     this.Output.AddLast(new LineBreakNode());
             }
 
