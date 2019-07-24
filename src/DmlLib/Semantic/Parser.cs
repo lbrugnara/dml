@@ -823,6 +823,23 @@ namespace DmlLib.Semantic
 
         private void ParseInlineCode(ParsingContext ctx)
         {
+            // Lookahead to search for the "ending" token, if it is not present, the "InlineCode" we found
+            // is [not] an inline code tag
+            Token tmp = null;
+            int i = 0;
+            while ((tmp = this.PeekToken(++i)) != null)
+            {
+                if (tmp.Type == TokenType.InlineCode || tmp.Type == TokenType.DoubleNewLine)
+                    break;
+            }
+
+            if (tmp == null || tmp.Type == TokenType.DoubleNewLine)
+            {
+                this.ParseText(ctx);
+                return;
+            }
+
+            // At this point we made sure it is a valid inline code tag
             bool oldMarkupProcessingMode = ctx.SetMarkupProcessingEnabled(false);
 
             this.ParseInline(ctx, new CodeNode(false), TokenType.InlineCode);
