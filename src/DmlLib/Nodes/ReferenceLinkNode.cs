@@ -10,8 +10,8 @@ namespace DmlLib.Nodes
         public ReferenceLinkNode(string reference, string title)
         {
             TagName = "sup";
-            LinkNode a = new LinkNode("#" + reference, title);
-            a.AddChild(new TextNode(reference));
+            LinkNode a = new LinkNode("#" + reference, reference);
+            a.AddChild(new TextNode(!string.IsNullOrEmpty(title) ? title : reference));
             AddChild(a);
         }
 

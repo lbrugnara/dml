@@ -73,7 +73,21 @@ namespace DmlCli.Tools
                 List<string> observed = new List<string>(Env.InputFiles);
                 observed.AddRange(Env.Styles.Where(s => File.Exists(s)).ToList());
                 observed.AddRange(Env.Scripts.Where(s => File.Exists(s)).ToList());
-                FileObserver.OnFileChangeDetect(observed, Env.Watch.Value, () => Exec(string.Join("\n\n", Env.InputFiles.Select(f => File.ReadAllText(f)))));
+                FileObserver.OnFileChangeDetect(observed, Env.Watch.Value, () => {
+
+                    var sources = new List<string>();
+
+                    foreach (var fileInput in Env.InputFiles)
+                    {
+                        using (var fileStream = new FileStream(fileInput, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        using (StreamReader reader = new StreamReader(fileStream))
+                        {
+                            sources.Add(reader.ReadToEnd());
+                        }
+                    }
+
+                    Exec(string.Join("\n\n", sources));
+                });
             }
             else if (Env.Interactive)
             {

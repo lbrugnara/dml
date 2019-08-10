@@ -24,12 +24,12 @@ namespace DmlLib.Nodes
         public Dictionary<string, object> Properties { get; private set; }
         public Dictionary<string, string> Attributes { get; private set; }
         public virtual List<DmlElement> Children { get; private set; }
-        public DmlElement Parent { get; private set; }
+        public DmlElement Parent { get; set; }
         public abstract DmlElementType ElementType { get; }
 
-        public virtual string InnerText => string.Join("", Children.Select(c => c.InnerText));
+        public virtual string InnerText => string.Join("", this.Children.Select(c => c.InnerText));
 
-        public virtual string InnerXml => string.Join("", Children.Select(c => c.OuterXml));
+        public virtual string InnerXml => string.Join("", this.Children.Select(c => c.OuterXml));
 
         public virtual string OuterXml
         {
@@ -43,7 +43,7 @@ namespace DmlLib.Nodes
                 }
 
                 if (_endTag)
-                    return $"<{this.TagName}{attrs}>{string.Join("", this.Children.Select(c => c.OuterXml))}</{this.TagName}>";
+                    return $"<{this.TagName}{attrs}>{this.InnerXml}</{this.TagName}>";
 
                 return $"<{this.TagName}{attrs} />";
             }

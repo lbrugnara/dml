@@ -27,5 +27,9 @@ namespace DmlLib.Nodes
             }
             return $"[{base.ToMarkdown(ctx)}]({href} \"{title}\")";
         }
+
+        public override string InnerXml => base.InnerXml.Trim();
+
+        public override string InnerText => base.InnerText.Trim();
     }
 }

@@ -104,12 +104,10 @@ doc/
 ## Todo
 
 Next are pending features in no particular order
-- [ ] Detect HTML chunks to handle them properly. Now **DML** is just sending to the output the HTML received "as-is", to use HTML tags you need toput them in the same line, because the lexer (thus the parser) doesn't recognize HTML tagas as token, so all the DML tags will take precedence over them
-- [ ] Tables. Currently there are some tricks using code blocks to build tables without the need to "one-line" thems
+- [ ] Detect HTML chunks to handle them properly. Now **DML** is just sending to the output the HTML received "as-is", to use HTML tags you need to put them in the same line, because the lexer (thus the parser) doesn't recognize HTML tags as token, so all the DML tags will take precedence over them
+- [ ] Tables. Currently there are some tricks using code blocks to build tables without the need to "one-line" them
 - [ ] Generate pretty HTML output
-- [x] Accept multiple input files to generate the output consuming them in the order specified in the arguments
-- [x] To create two paragraph we need the _two-nl_ rule. But this rule is based on the _HTML Paragraph_, not the _grammar paragraph_. Is true that we need both, so it would be great to check the end character when just on **NL** is used, and if that character is a dot (or eventually a defined set of punctuation marks), we should add an _HTML Line Break_ to respect the "grammar" paragraph that was intended to be used.
-- [x] List items: Using **NL** doesn't add an space between words, so if the input is "- List\nitem" the output text will be "Listitem" instead of the expected "List item"
 - [ ] Markdown output: Add space between the first list item and the previous element
-- [ ] Sentences that start like a new list and are actually followed by titles markup are not correctly being handled
+- [ ] Sentences that start like a new list and are actually followed by titles markup are not correctly being handled (maybe a list should break if it finds a `NewLine` + `HeaderStart` combination)
+- [ ] Currently, the headers are simply taking the children of the last parsed element to insert them as its children, but we should check the type of the last element (block or inline) to know if we can directly "embed" it into the header, or if we should "grab" the last element's children instead. As an example, a paragraph or a list shouldn't be a child of a header element, but a link should be (basically, each block-type element should return its most-immediate inline element, while the inline elements can be directly embedded into the header).
 - [ ] The _two-nl_ rule does not work correctly in blockquotes, they are being ignored when there are more than 1 occurrence

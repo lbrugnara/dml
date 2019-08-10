@@ -21,6 +21,7 @@ namespace DmlLib.Nodes
         LineBreak,
         Paragraph,
         Preformatted,
+        ReferenceGroup,
         ReferenceLink,
         Reference,
         Strike,

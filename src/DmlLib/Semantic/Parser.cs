@@ -36,8 +36,7 @@ namespace DmlLib.Semantic
                 { TokenType.Blockquote,     this.ParseBlockquote    },
                 { TokenType.CodeBlock,      this.ParseCodeBlock     },
                 { TokenType.Preformatted,   this.ParsePreformatted  },
-                { TokenType.Indentation,    this.ParsePreformatted  },
-                { TokenType.Reference,      this.ParseReference     },
+                { TokenType.Indentation,    this.ParsePreformatted  },                
                 { TokenType.ListItem,       this.ParseList          },
                 { TokenType.ThematicBreak,  this.ParseThematicBreak },
                 { TokenType.NewLine,        this.ParseNewLine       }
@@ -47,6 +46,7 @@ namespace DmlLib.Semantic
             this.InlineElementParsers = new Dictionary<TokenType, ElementParser>()
             {
                 { TokenType.Text,           this.ParseText          },
+                { TokenType.Reference,      this.ParseReference     },
                 { TokenType.EscapeBlock,    this.ParseEscapeBlock   },
                 { TokenType.Escape,         this.ParseEscape        },
                 { TokenType.LinkStart,      this.ParseLink          },
@@ -209,7 +209,9 @@ namespace DmlLib.Semantic
 
                 // If the token value ends with a dot and the next token we have to process is a NL
                 // we need to add a line break to honor the grammatical paragraph
-                if (this.Output.Last.Value.InnerText.Trim()?.EndsWith(".") == true && this.PeekToken()?.Type == TokenType.NewLine)
+                var isGrammaticalParagraph = this.Output.Last.Value.InnerText.Trim()?.EndsWith(".") == true && this.PeekToken()?.Type == TokenType.NewLine;
+
+                if (isGrammaticalParagraph)
                     this.Output.AddLast(new LineBreakNode());
             }
 
@@ -412,6 +414,11 @@ namespace DmlLib.Semantic
             // Consume last parsed element as it has to be
             // the header's content
             header.MergeChildren(this.PopElement());
+
+            // Build an id for the header
+            var id = header.InnerText.Replace(" ", "-").ToLower().Trim();
+            // TODO: Should we sanitize/modify something here?
+            header.Attributes["id"] = id;
             
             this.Output.AddLast(header);
         }
@@ -645,6 +652,12 @@ namespace DmlLib.Semantic
                 if (token.Type == TokenType.NewLine)
                 {
                     this.ConsumeToken();
+
+                    var isGrammaticalParagraph = this.Output.Last.Value.InnerText.Trim()?.EndsWith(".") == true;
+
+                    if (isGrammaticalParagraph)
+                        this.Output.AddLast(new LineBreakNode());
+
                     continue;
                 }
 
@@ -1018,21 +1031,21 @@ namespace DmlLib.Semantic
             href = href.Trim();
             if (href.StartsWith(":"))
             {
-                List<string> titles = title.Split(',').ToList();
-                List<string> hrefs = href.Substring(1).Split(',').ToList();
+                List<string> titles = title.Trim().Split(',').ToList();
+                List<string> hrefs = href.Substring(1).Trim().Split(',').ToList();
 
-                CustomNode links = new CustomNode("span");
+                var referenceGroup = new ReferenceGroupNode();
 
                 while (this.Output.Any() & this.Output.Last != lastNode)
-                    links.InsertChild(0, this.PopElement());
+                    referenceGroup.InsertChild(0, this.PopElement());
 
                 for (int i = 0; i < hrefs.Count; i++)
                 {
                     ReferenceLinkNode refLink = new ReferenceLinkNode(hrefs.ElementAt(i), titles.ElementAtOrDefault(i));
-                    links.AddChild(refLink);
+                    referenceGroup.Links.Add(refLink);
                 };
 
-                this.Output.AddLast(links);
+                this.Output.AddLast(referenceGroup);
 
                 return;
             }
@@ -1271,7 +1284,63 @@ namespace DmlLib.Semantic
             while (this.Output.Any() & this.Output.Last != lastNode)
                 reference.InsertChild(0, this.PopElement());
 
+            // Add the reference
             this.Output.AddLast(reference);
+
+            // Get a reference to the first token before any img's token
+            lastNode = this.Output.Last;
+
+            // Process the referece siblings, "logically" we consider it a block (see below)
+            while (this.HasTokens)
+            {
+                var token = this.PeekToken();
+
+                // Break on 2NL
+                if (token.Type == TokenType.DoubleNewLine)
+                {
+                    break;
+                }
+                // Break on Reference to "close" de block
+                else if (token.Type == TokenType.Reference)
+                {
+                    break;
+                }
+                
+
+                // If it is not an inline element we need to check
+                // if we can process it with ParseText or just break the
+                // loop.
+                // If the token type cannot be parsed by a block parser, we
+                // just add it as plain text, if not, we break the loop.
+                if (!this.InlineElementParsers.ContainsKey(token.Type))
+                {
+                    if (!this.BlockElementParsers.ContainsKey(token.Type))
+                    {
+                        this.ParseText(ctx);
+                        continue;
+                    }
+                    break;
+                }
+
+                this.InlineElementParsers[token.Type].Invoke(ctx);
+            }
+
+            // Create new paragraph, add childs and add it to
+            // the temporal output
+            var referenceSiblings = new GroupNode();
+
+
+            while (this.Output.Any() & this.Output.Last != lastNode)
+                referenceSiblings.InsertChild(0, this.PopElement());
+
+            this.Output.AddLast(referenceSiblings);
+
+            // Even though references are treated like inline elements, we add a line break
+            // after them to simulate block behavior. The advantage of this hack is to give them 
+            // a "list-like" format without the need of breaking the references into multiple
+            // paragraphs by considering them block elements or by separating them with double new lines
+            // nor force users to add a dot to trigger grammatical paragraphs
+            this.Output.AddLast(new LineBreakNode());
         }
 
         private void ParseEscape(ParsingContext ctx)
